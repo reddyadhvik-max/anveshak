@@ -1,0 +1,7 @@
+# Development log
+
+One row per phase. Details are in `docs/phases/PHASE_<n>.md`. Each phase is a `--no-ff` merge on `main` with an annotated tag.
+
+| Phase | Tag | Date | What changed | A-val mAP_K (base) | B-val mAP (few-shot) | Dev-sim U-F1 | Dev-sim OE |
+|---|---|---|---|---|---|---|---|
+| P0 Foundations | `p0-foundations` | 2026-11-18 | Data audit, local OE scorer, validator-safe CSV writer, from-scratch guards, fixed 52-slot P2 model, objectness slot, stage runner | n/a | n/a | n/a | n/a |
