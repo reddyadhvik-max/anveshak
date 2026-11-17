@@ -1,0 +1,7 @@
+# torch/torchvision installed separately per machine:
+#   LOQ (RTX 5050, Blackwell): uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#   Mac (dev only):            uv pip install torch torchvision
+ultralytics==8.4.215
+numpy
+pandas
+pytest
