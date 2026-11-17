@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+runs/
+ckpt/
+data/
+*.pt
+*.tif
+*.cache
+.DS_Store
