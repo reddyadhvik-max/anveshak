@@ -70,6 +70,7 @@ def main():
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--validator", help="validate_predictions.py; run it on the CSV when given")
     a = ap.parse_args()
+    a.device = f"cuda:{a.device}" if a.device.isdigit() else a.device  # Ultralytics-style --device 0
 
     from ultralytics.utils import YAML
     pp = YAML.load(a.postproc)
