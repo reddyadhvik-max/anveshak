@@ -10,23 +10,23 @@ import argparse
 import csv
 import html
 import json
-import os
-import signal
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
+from anveshak.train import spawn
+
 REPO = Path(__file__).resolve().parent.parent
 RUNS = REPO / "runs"
 
 
 def alive(pid):
+    import psutil  # Ultralytics dependency; os.kill(pid, 0) would send Ctrl+C on Windows
     try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, TypeError):
+        return bool(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.Error:
         return False
 
 
@@ -35,7 +35,9 @@ def run_info(run):
     state = st["state"]
     if state == "running" and not alive(st.get("pid")):
         state = "stopped"  # process died without updating state (crash, reboot, power loss)
-    if state == "running" and (run / "PAUSE").exists():
+    if state == "running" and (run / "STOP").exists():
+        state = "stopping"
+    elif state == "running" and (run / "PAUSE").exists():
         state = "pausing"
     rows = list(csv.DictReader(open(run / "results.csv"))) if (run / "results.csv").exists() else []
     last = {k.strip(): v.strip() for k, v in rows[-1].items()} if rows else {}
@@ -63,7 +65,7 @@ def runs():
     return sorted((r for r in RUNS.glob("*") if (r / "state.json").exists()), key=lambda r: r.stat().st_mtime, reverse=True)
 
 
-COLORS = {"running": "#1a7f37", "pausing": "#9a6700", "paused": "#0969da", "finished": "#6e7781", "stopped": "#cf222e"}
+COLORS = {"running": "#1a7f37", "pausing": "#9a6700", "paused": "#0969da", "finished": "#6e7781", "stopped": "#cf222e", "stopping": "#cf222e"}
 
 
 def page():
@@ -78,7 +80,7 @@ def page():
         elif i["state"] == "pausing":
             btn = '<button name="a" value="unpause">Cancel pause</button>' + stop
         elif i["state"] in ("paused", "stopped") and i["resumable"]:
-            btn = f'<button name="a" value="resume">Resume</button>'
+            btn = '<button name="a" value="resume">Resume</button>'
         cards.append(f"""<div class="card"><h2>{html.escape(i['name'])}
 <span class="pill" style="background:{COLORS[i['state']]}">{i['state']}</span></h2>
 <p>epoch <b>{i['epoch']}</b> &middot; mAP50 {i['mAP50']} &middot; mAP50-95 {i['mAP50-95']} &middot; state since {i['time']}</p>
@@ -105,15 +107,13 @@ def act(name, action):
     if action == "pause" and state == "running":
         (run / "PAUSE").touch()
     elif action == "stop" and state in ("running", "pausing"):
-        os.kill(json.loads((run / "state.json").read_text())["pid"], signal.SIGTERM)  # train.py turns this into Ctrl+C; last.pt stays resumable
+        (run / "STOP").touch()  # train.py checks it every batch and stops like Ctrl+C
     elif action == "unpause":
         (run / "PAUSE").unlink(missing_ok=True)
     elif action == "resume" and state in ("paused", "stopped"):
-        (run / "PAUSE").unlink(missing_ok=True)
-        log = open(run / "train.log", "a")
-        p = subprocess.Popen([sys.executable, "-m", "anveshak.train", "--resume", str(run / "weights" / "last.pt")],
-                             cwd=REPO, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        (run / "state.json").write_text(json.dumps({"state": "running", "pid": p.pid, "time": "starting"}))
+        for f in ("PAUSE", "STOP"):
+            (run / f).unlink(missing_ok=True)
+        spawn([sys.executable, "-m", "anveshak.train", "--resume", str(run / "weights" / "last.pt")], run)
 
 
 class H(BaseHTTPRequestHandler):

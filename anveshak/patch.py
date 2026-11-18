@@ -7,8 +7,6 @@
 """
 import hashlib
 
-import torch
-
 UNK_SLOT = 50
 OBJ_SLOT = 51
 NC = 52
