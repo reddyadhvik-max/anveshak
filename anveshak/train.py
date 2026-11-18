@@ -4,8 +4,10 @@
     python -m anveshak.train --name A --data ~/data/round1/yolo/data_A.yaml --scale s epochs=200 imgsz=1024 batch=8
   Every later stage continues from the previous checkpoint (never from a yaml again):
     python -m anveshak.train --name B --data .../data_B.yaml --from runs/A/weights/last.pt epochs=60 freeze=10
-  Pause after the current epoch: touch runs/<name>/PAUSE (or the Pause button in `python -m anveshak.control`)
-  Resume:                        python -m anveshak.train --resume runs/<name>/weights/last.pt
+  Add --detach to run in the background (log: runs/<name>/train.log); this is how stages should be started.
+  Pause after the current epoch: create runs/<name>/PAUSE  (or the panel: python -m anveshak.control)
+  Stop now (within ~1 batch):    create runs/<name>/STOP
+  Resume:                        python -m anveshak.train --resume runs/<name>/weights/last.pt --detach
 
 Extra key=value args go straight to Ultralytics' train(). runs/<name>/provenance.json records where each
 stage started, which proves the lineage A -> B -> R2 from one random init.
@@ -14,7 +16,8 @@ import argparse
 import json
 import os
 import shutil
-import signal
+import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -23,7 +26,8 @@ import torch
 
 from anveshak import patch
 
-CFG = Path(__file__).resolve().parent.parent / "configs" / "yolo11-p2.yaml"
+REPO = Path(__file__).resolve().parent.parent
+CFG = REPO / "configs" / "yolo11-p2.yaml"
 
 
 def parse_kv(items):
@@ -49,8 +53,32 @@ def pause_after_save(trainer):
         raise SystemExit(0)
 
 
-def _sigterm(*_):
-    raise KeyboardInterrupt  # "Stop now" button; background jobs ignore SIGINT, so the panel sends SIGTERM
+def stop_now(trainer):
+    """Every training batch: if runs/<name>/STOP exists, stop like Ctrl+C. Works the same on Windows and POSIX
+    (no signals). last.pt from the previous epoch stays resumable."""
+    flag = Path(trainer.save_dir) / "STOP"
+    if flag.exists():
+        flag.unlink()
+        raise KeyboardInterrupt
+
+
+def spawn(cmd, run):
+    """Start cmd in the background, detached from this terminal, logging to run/train.log. Returns the pid."""
+    run.mkdir(parents=True, exist_ok=True)
+    cmd = [c.replace("pythonw.exe", "python.exe") for c in cmd]  # the panel runs under pythonw; training wants python
+    with open(run / "train.log", "a") as log:
+        args = dict(cwd=REPO, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                    env={**os.environ, "YOLO_OFFLINE": "1"})
+        if os.name != "nt":
+            p = subprocess.Popen(cmd, start_new_session=True, **args)
+        else:  # hidden console of its own (dataloader workers inherit it, so no windows pop up)
+            flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+            try:  # leave the launching shell's job object, so closing that shell doesn't kill training
+                p = subprocess.Popen(cmd, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **args)
+            except OSError:  # that job doesn't allow breakaway
+                p = subprocess.Popen(cmd, creationflags=flags, **args)
+    (run / "state.json").write_text(json.dumps({"state": "running", "pid": p.pid, "time": "starting"}))
+    return p.pid
 
 
 def main():
@@ -62,10 +90,16 @@ def main():
     ap.add_argument("--scale", default="s", help="only used for the first stage")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--project", default="runs")
+    ap.add_argument("--detach", action="store_true", help="run in the background, log to runs/<name>/train.log")
     ap.add_argument("kv", nargs="*")
     a = ap.parse_args()
     if not a.resume and not (a.name and a.data):
         ap.error("--name and --data are required unless --resume is given")
+    if a.detach:
+        run = Path(a.resume).resolve().parent.parent if a.resume else (Path(a.project) / a.name).resolve()
+        pid = spawn([sys.executable, "-m", "anveshak.train", *[x for x in sys.argv[1:] if x != "--detach"]], run)
+        print(f"started pid {pid}; log: {run / 'train.log'}; panel: http://localhost:8765")
+        return
     patch.apply()
     from ultralytics import YOLO
 
@@ -98,8 +132,8 @@ def main():
         train_kwargs = dict(data=str(Path(a.data).expanduser()), project=str(run.parent), name=a.name, exist_ok=True, **kv)
 
     (run / "provenance.json").write_text(json.dumps(prov, indent=1))
-    signal.signal(signal.SIGTERM, _sigterm)
     model.add_callback("on_model_save", pause_after_save)
+    model.add_callback("on_train_batch_end", stop_now)
     set_state(run, "running")
     try:
         model.train(**train_kwargs)
