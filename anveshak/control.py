@@ -47,7 +47,51 @@ def run_info(run):
         epochs = next((l.split(":", 1)[1].strip() for l in open(run / "args.yaml") if l.startswith("epochs:")), "?")
     return {"name": run.name, "state": state, "time": st["time"], "epoch": f"{len(rows)}/{epochs}",
             "mAP50": last.get("metrics/mAP50(B)", "-"), "mAP50-95": last.get("metrics/mAP50-95(B)", "-"),
-            "resumable": (run / "weights" / "last.pt").exists()}
+            "resumable": (run / "weights" / "last.pt").exists(), "rows": rows,
+            "total": int(epochs) if str(epochs).isdigit() else len(rows)}
+
+
+def fmt_dur(sec):
+    sec = int(sec)
+    return f"{sec // 3600}h {sec % 3600 // 60:02d}m" if sec >= 3600 else f"{sec // 60}m {sec % 60:02d}s"
+
+
+def epoch_log(i):
+    """Done / in progress / to do, with per-epoch metrics and an ETA."""
+    rows = [{k.strip(): v.strip() for k, v in r.items()} for r in i["rows"]]
+    total, done = max(i["total"], len(rows)), len(rows)
+    active = i["state"] in ("running", "pausing", "stopping") and done < total
+    # Ultralytics' "time" column is cumulative seconds, but it restarts from 0 after a resume.
+    durs, prev = [], 0.0
+    for r in rows:
+        try:
+            t = float(r.get("time", "") or 0)
+        except ValueError:
+            t = 0.0
+        durs.append(t - prev if t > prev else t)
+        prev = t
+    known = [d for d in durs if d > 0]
+    todo = total - done - (1 if active else 0)
+    eta = f" &middot; about <b>{fmt_dur(sum(known) / len(known) * (total - done))}</b> left" if known and done < total and i["state"] != "finished" else ""
+    pct = 100 * done / total if total else 0
+    summary = (f"Epoch log: <b>{done}</b> done &middot; <b>{1 if active else 0}</b> in progress &middot; "
+               f"<b>{max(todo, 0)}</b> to go{eta}")
+    bar = (f'<div class="bar"><div style="width:{pct:.1f}%"></div></div>')
+    trs = []
+    if active:
+        trs.append(f'<tr class="now"><td>{done + 1}</td><td colspan="5">in progress</td></tr>')
+    for n in range(done, 0, -1):
+        r, d = rows[n - 1], durs[n - 1]
+        trs.append(f"<tr><td>{n}</td><td>done</td><td>{r.get('metrics/mAP50(B)', '-')}</td><td>{r.get('metrics/mAP50-95(B)', '-')}</td>"
+                   f"<td>{r.get('train/box_loss', '-')}</td><td>{fmt_dur(d) if d > 0 else '-'}</td></tr>")
+    if done < total:
+        nxt = done + 2 if active else done + 1
+        if nxt <= total:
+            trs.insert(0, f'<tr class="todo"><td>{nxt}&ndash;{total}</td><td colspan="5">to do</td></tr>' if nxt < total
+                       else f'<tr class="todo"><td>{total}</td><td colspan="5">to do</td></tr>')
+    table = ("<table><tr><th>epoch</th><th>status</th><th>mAP50</th><th>mAP50-95</th><th>box loss</th><th>time</th></tr>"
+             + "".join(trs) + "</table>")
+    return f'{bar}<details open><summary>{summary}</summary><div style="max-height:320px;overflow-y:auto">{table}</div></details>'
 
 
 def gpu():
@@ -85,6 +129,7 @@ def page():
         cards.append(f"""<div class="card"><h2>{html.escape(i['name'])}
 <span class="pill" style="background:{COLORS[i['state']]}">{i['state']}</span></h2>
 <p>epoch <b>{i['epoch']}</b> &middot; mAP50 {i['mAP50']} &middot; mAP50-95 {i['mAP50-95']} &middot; state since {i['time']}</p>
+{epoch_log(i)}
 <form method="post"><input type="hidden" name="run" value="{html.escape(i['name'])}">{btn}</form>
 <details><summary>log</summary><pre>{html.escape(tail(r / 'train.log'))}</pre></details></div>""")
     body = "".join(cards) or "<p>No runs yet. Start a stage with <code>python -m anveshak.train ...</code></p>"
@@ -95,6 +140,9 @@ body{{font:15px system-ui;margin:16px;max-width:820px;background:#f6f8fa;color:#
 h2{{font-size:18px;margin:4px 0}} .pill{{color:#fff;border-radius:12px;padding:2px 10px;font-size:13px;margin-left:8px}}
 button{{font-size:16px;padding:8px 16px;border-radius:6px;border:1px solid #888;cursor:pointer}}
 pre{{font-size:12px;overflow-x:auto;background:#f6f8fa;padding:8px}}
+.bar{{height:8px;background:#d0d7de;border-radius:4px;overflow:hidden;margin:6px 0}} .bar div{{height:100%;background:#1a7f37}}
+table{{border-collapse:collapse;font-size:13px;margin:6px 0 10px;width:100%}} th,td{{text-align:left;padding:3px 8px;border-bottom:1px solid #d0d7de}}
+tr.now td{{color:#1a7f37;font-weight:600}} tr.todo td{{color:#6e7781}} details{{max-height:none}}
 @media(prefers-color-scheme:dark){{body{{background:#0d1117;color:#e6edf3}}.card{{background:#161b22;border-color:#30363d}}pre{{background:#0d1117}}}}
 </style></head><body><h1>Anveshak training</h1><p>GPU: {html.escape(gpu())}</p>{body}
 <p style="color:#6e7781">Pause takes effect when the current epoch finishes and its checkpoint is saved. The page refreshes every 30 s.</p></body></html>"""
