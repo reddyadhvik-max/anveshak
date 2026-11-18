@@ -42,7 +42,9 @@ mkdir -p runs/A && nohup python -m anveshak.train --name A ... >> runs/A/train.l
 **Pause after this epoch** drops `runs/<name>/PAUSE`. Training exits right after the next `last.pt` save, with the
 optimizer state intact. **Resume** runs `python -m anveshak.train --resume runs/<name>/weights/last.pt` and continues
 from the next epoch. A crashed or rebooted run shows as `stopped` and resumes the same way. Every resume is
-recorded in `provenance.json`.
+recorded in `provenance.json`. **Stop now** (with a confirmation prompt) ends the run immediately, losing only the epoch in progress.
+
+On the LOQ, `bash scripts/loq/setup_wsl.sh` sets everything up, including a **desktop shortcut "Anveshak Training"** that opens the panel (starting it if needed), the panel at Windows login, and no sleep on AC. See [docs/LOQ_HANDOFF.md](docs/LOQ_HANDOFF.md).
 
 ## Inference, scoring, CSV
 Built in phases P1–P3. See [PLAN.md §7–8](PLAN.md).
