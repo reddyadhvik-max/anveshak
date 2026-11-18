@@ -49,8 +49,8 @@ Say "Shortcuts"
 $shell = New-Object -ComObject WScript.Shell
 function New-Shortcut($path, $extra, $desc) {
     $s = $shell.CreateShortcut($path)
-    $s.TargetPath = "powershell.exe"
-    $s.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$repo\scripts\loq\open_panel.ps1`" $extra"
+    $s.TargetPath = "$repo\.venv\Scripts\pythonw.exe"   # pythonw: no console window flashes on double-click
+    $s.Arguments = "`"$repo\scripts\loq\open_panel.pyw`" $extra"
     $s.WorkingDirectory = $repo
     $s.IconLocation = "$env:SystemRoot\System32\shell32.dll,137"
     $s.Description = $desc
@@ -59,7 +59,7 @@ function New-Shortcut($path, $extra, $desc) {
 }
 $desktop = [Environment]::GetFolderPath("Desktop")
 New-Shortcut (Join-Path $desktop "Anveshak Training.lnk") "" "Pause / resume / stop Anveshak training"
-New-Shortcut (Join-Path ([Environment]::GetFolderPath("Startup")) "Anveshak Panel.lnk") "-NoBrowser" "Start the Anveshak panel at login"
+New-Shortcut (Join-Path ([Environment]::GetFolderPath("Startup")) "Anveshak Panel.lnk") "--no-browser" "Start the Anveshak panel at login"
 Write-Host "Desktop: $desktop\Anveshak Training.lnk ; panel also starts at login"
 
 Say "Power (training runs for days)"

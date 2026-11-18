@@ -97,7 +97,10 @@ def epoch_log(i):
 def gpu():
     try:
         return subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw",
-                               "--format=csv,noheader"], capture_output=True, text=True, timeout=5).stdout.strip()
+                               "--format=csv,noheader"], capture_output=True, text=True, timeout=5,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.strip()
+        # CREATE_NO_WINDOW: the panel runs under pythonw (no console), so without it Windows flashes
+        # a console window for every nvidia-smi call, i.e. on every 30 s page refresh.
     except (OSError, subprocess.TimeoutExpired):
         return "nvidia-smi not available"
 
