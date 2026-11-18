@@ -11,6 +11,7 @@ import csv
 import html
 import json
 import os
+import signal
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -70,10 +71,12 @@ def page():
     for r in runs():
         i = run_info(r)
         btn = ""
+        stop = ('<button name="a" value="stop" style="margin-left:8px;border-color:#cf222e;color:#cf222e" '
+                'onclick="return confirm(\'Stop now? The epoch in progress is lost; you can resume from the last checkpoint.\')">Stop now</button>')
         if i["state"] == "running":
-            btn = f'<button name="a" value="pause">Pause after this epoch</button>'
+            btn = '<button name="a" value="pause">Pause after this epoch</button>' + stop
         elif i["state"] == "pausing":
-            btn = f'<button name="a" value="unpause">Cancel pause</button>'
+            btn = '<button name="a" value="unpause">Cancel pause</button>' + stop
         elif i["state"] in ("paused", "stopped") and i["resumable"]:
             btn = f'<button name="a" value="resume">Resume</button>'
         cards.append(f"""<div class="card"><h2>{html.escape(i['name'])}
@@ -101,6 +104,8 @@ def act(name, action):
     state = run_info(run)["state"]
     if action == "pause" and state == "running":
         (run / "PAUSE").touch()
+    elif action == "stop" and state in ("running", "pausing"):
+        os.kill(json.loads((run / "state.json").read_text())["pid"], signal.SIGTERM)  # train.py turns this into Ctrl+C; last.pt stays resumable
     elif action == "unpause":
         (run / "PAUSE").unlink(missing_ok=True)
     elif action == "resume" and state in ("paused", "stopped"):

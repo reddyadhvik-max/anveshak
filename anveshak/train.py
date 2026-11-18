@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import tempfile
 import time
 from pathlib import Path
@@ -46,6 +47,10 @@ def pause_after_save(trainer):
         set_state(run, "paused")
         print(f"\nPaused after epoch {trainer.epoch + 1}/{trainer.epochs}. Resume from {run / 'weights' / 'last.pt'}", flush=True)
         raise SystemExit(0)
+
+
+def _sigterm(*_):
+    raise KeyboardInterrupt  # "Stop now" button; background jobs ignore SIGINT, so the panel sends SIGTERM
 
 
 def main():
@@ -93,6 +98,7 @@ def main():
         train_kwargs = dict(data=str(Path(a.data).expanduser()), project=str(run.parent), name=a.name, exist_ok=True, **kv)
 
     (run / "provenance.json").write_text(json.dumps(prov, indent=1))
+    signal.signal(signal.SIGTERM, _sigterm)
     model.add_callback("on_model_save", pause_after_save)
     set_state(run, "running")
     try:
