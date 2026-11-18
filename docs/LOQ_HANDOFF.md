@@ -43,7 +43,7 @@ the **"Anveshak Training"** desktop shortcut + a Startup entry (panel server at 
 - Scripts were written on a Mac and never executed on Windows. If something breaks, fix it, commit with the reason, and tell the Mac session.
 
 ### 3. Verify the buttons (with the user watching)
-1. Double-click **Anveshak Training** on the desktop. The browser opens http://localhost:8765.
+1. Double-click **Anveshak Training** on the desktop. The browser opens http://localhost:8790.
 2. Start a tiny run in the background:
    `.venv\Scripts\python -m anveshak.train --detach --name panel_test --data ~/data/round1/yolo/data_A.yaml --scale n epochs=3 fraction=0.02 imgsz=640 batch=8 workers=4`
 3. In the panel: **Pause after this epoch** → *paused* after epoch 1 → **Resume** → continues at epoch 2 → **Stop now** (stops within ~1 batch) → *stopped* → **Resume** → finishes.

@@ -1,6 +1,6 @@
 """Training control panel: Pause (after the current epoch's checkpoint) and Resume buttons.
 
-  python -m anveshak.control            # then open http://localhost:8765 (works from Windows with WSL2 too)
+  python -m anveshak.control            # then open http://localhost:8790 (port: --port or $ANVESHAK_PORT)
   python -m anveshak.control --host 0.0.0.0   # only on a trusted network such as Tailscale: anyone who can reach it can pause or resume
 
 Pause doesn't kill anything. It drops a PAUSE file, and train.py exits cleanly right after the next
@@ -10,6 +10,7 @@ import argparse
 import csv
 import html
 import json
+import os
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -142,7 +143,7 @@ class H(BaseHTTPRequestHandler):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--port", type=int, default=int(os.environ.get("ANVESHAK_PORT", 8790)))
     a = ap.parse_args()
     print(f"Control panel on http://{'localhost' if a.host == '127.0.0.1' else a.host}:{a.port}")
     ThreadingHTTPServer((a.host, a.port), H).serve_forever()
