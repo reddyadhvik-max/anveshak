@@ -34,6 +34,16 @@ python -m anveshak.train --name A --data ~/data/round1/yolo/data_A.yaml --scale 
 python -m anveshak.train --name B --data ~/data/round1/yolo/data_B.yaml --from runs/A/weights/last.pt freeze=10 ...
 ```
 
+## Pause / resume (control panel)
+```bash
+nohup python -m anveshak.control > /dev/null 2>&1 &     # once per boot; open http://localhost:8765
+mkdir -p runs/A && nohup python -m anveshak.train --name A ... >> runs/A/train.log 2>&1 &
+```
+**Pause after this epoch** drops `runs/<name>/PAUSE`. Training exits right after the next `last.pt` save, with the
+optimizer state intact. **Resume** runs `python -m anveshak.train --resume runs/<name>/weights/last.pt` and continues
+from the next epoch. A crashed or rebooted run shows as `stopped` and resumes the same way. Every resume is
+recorded in `provenance.json`.
+
 ## Inference, scoring, CSV
 Built in phases P1–P3. See [PLAN.md §7–8](PLAN.md).
 `tools/oe_score.py` re-implements the published OE metric. `tools/make_csv.py` writes CSVs that pass `validate_predictions.py`.

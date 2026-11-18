@@ -236,7 +236,7 @@ Prep (P6): `r2/run_r2.sh <r2.zip>` does unzip → convert (R2 ids → slots 40�
 | Set B teaches base objects = background | Old-class pseudo-labels + replay (§5.5) |
 | Tiny objects | P2 head, native 1024, no downscaling |
 | Dense tiles OOM in the assigner | Batch 4 + nbs 64. CPU fallback is built in |
-| Laptop thermals or crash over days | `save_period=5`, `resume=True`, cooling pad, ntfy alerts, `nvidia-smi` temp log |
+| Laptop thermals or crash over days, or the laptop needed for other work | Pause button (control panel) → resume from `last.pt`; `resume=True`, cooling pad, ntfy alerts, `nvidia-smi` temp log |
 | RTX 5050 needs CUDA 12.8 | cu128 wheels. Verify `torch.cuda.get_device_capability()` = (12, 0) |
 | Unknown flood lowers mAP via the conflict rule | Self-applied policy tuned on OE |
 | Reproduction mismatch | FP32 deterministic, pinned, config shipped, GPU+CPU repro check |
@@ -249,4 +249,5 @@ No DETRs (slow from scratch). No self-supervised pre-stage (breaks "A first"). N
 - **2026-11-18:** Team registered. GPU confirmed (RTX 5050 8 GB). Data audited remotely (no 20 GB download needed on the Mac).
   - **P0 built:** `patch.py` (no-AMP-download + objectness slot), `yolo11-p2.yaml` (nc 52), `train.py` (provenance, lineage `--from`), `convert.py`, `eda.py`, `oe_score.py`, `make_csv.py`. 12 tests pass, including the official validator.
   - CPU smoke test: random-init stage → checkpoint stage, offline, no `.pt` downloaded.
+  - **P1 started:** pause/resume control panel (`anveshak/control.py`, localhost:8765). Pause = clean exit right after the epoch's `last.pt` save; Resume = `--resume last.pt`. Tested live: paused after epoch 1/4, resumed 2→4, finished; a double-click spawns only one process.
   - **Next (P1, on the LOQ):** WSL2 + cu128 torch, download `round1.zip`, `convert.py`, scale benchmark, insurance baseline.
