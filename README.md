@@ -36,15 +36,15 @@ python -m anveshak.train --name B --data ~/data/round1/yolo/data_B.yaml --from r
 
 ## Pause / resume (control panel)
 ```bash
-nohup python -m anveshak.control > /dev/null 2>&1 &     # once per boot; open http://localhost:8765
-mkdir -p runs/A && nohup python -m anveshak.train --name A ... >> runs/A/train.log 2>&1 &
+python -m anveshak.control                      # panel on http://localhost:8765 (the LOQ starts it at login)
+python -m anveshak.train --detach --name A ...  # background run, log in runs/A/train.log
 ```
 **Pause after this epoch** drops `runs/<name>/PAUSE`. Training exits right after the next `last.pt` save, with the
 optimizer state intact. **Resume** runs `python -m anveshak.train --resume runs/<name>/weights/last.pt` and continues
 from the next epoch. A crashed or rebooted run shows as `stopped` and resumes the same way. Every resume is
-recorded in `provenance.json`. **Stop now** (with a confirmation prompt) ends the run immediately, losing only the epoch in progress.
+recorded in `provenance.json`. **Stop now** (with a confirmation prompt) drops `runs/<name>/STOP`. Training stops within one batch, losing only the epoch in progress.
 
-On the LOQ, `bash scripts/loq/setup_wsl.sh` sets everything up, including a **desktop shortcut "Anveshak Training"** that opens the panel (starting it if needed), the panel at Windows login, and no sleep on AC. See [docs/LOQ_HANDOFF.md](docs/LOQ_HANDOFF.md).
+On the LOQ (native Windows), `powershell -ExecutionPolicy Bypass -File scripts\loq\setup_windows.ps1` sets everything up, including a **desktop shortcut "Anveshak Training"** that opens the panel (starting it if needed), the panel at Windows login, and no sleep on AC. See [docs/LOQ_HANDOFF.md](docs/LOQ_HANDOFF.md).
 
 ## Inference, scoring, CSV
 Built in phases P1–P3. See [PLAN.md §7–8](PLAN.md).
