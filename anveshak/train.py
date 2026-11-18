@@ -98,7 +98,7 @@ def main():
     if a.detach:
         run = Path(a.resume).resolve().parent.parent if a.resume else (Path(a.project) / a.name).resolve()
         pid = spawn([sys.executable, "-m", "anveshak.train", *[x for x in sys.argv[1:] if x != "--detach"]], run)
-        print(f"started pid {pid}; log: {run / 'train.log'}; panel: http://localhost:8765")
+        print(f"started pid {pid}; log: {run / 'train.log'}; panel: http://localhost:{os.environ.get('ANVESHAK_PORT', 8790)}")
         return
     patch.apply()
     from ultralytics import YOLO

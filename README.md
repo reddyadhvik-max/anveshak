@@ -36,7 +36,7 @@ python -m anveshak.train --name B --data ~/data/round1/yolo/data_B.yaml --from r
 
 ## Pause / resume (control panel)
 ```bash
-python -m anveshak.control                      # panel on http://localhost:8765 (the LOQ starts it at login)
+python -m anveshak.control                      # panel on http://localhost:8790 (the LOQ starts it at login)
 python -m anveshak.train --detach --name A ...  # background run, log in runs/A/train.log
 ```
 **Pause after this epoch** drops `runs/<name>/PAUSE`. Training exits right after the next `last.pt` save, with the
