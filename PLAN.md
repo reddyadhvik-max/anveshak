@@ -62,10 +62,10 @@ Full per-class table: `docs/phases/PHASE_0.md`.
 | Need | Tool | Notes |
 |---|---|---|
 | Training lineage + inference | **LOQ 15AHP10, RTX 5050 Laptop 8 GB** (Blackwell, sm_120) | **Needs PyTorch built for CUDA 12.8** (`cu128` wheels). Plugged in, Lenovo Vantage Performance mode, cooling pad, sleep and hibernate off, Windows Update paused for 2 weeks. |
-| OS on LOQ | **WSL2 Ubuntu 24.04** | Data inside WSL ext4 (`~/data/round1`), never `/mnt/c`. `.wslconfig`: `memory=12GB`, `swap=24GB`, `processors=` all but 2. |
+| OS on LOQ | **Native Windows 11** (decided 2026-11-18; WSL wasn't installed, and native avoids admin, a reboot, the VM RAM cap and keeping WSL alive) | Data in `~\data\round1` on local NTFS, not OneDrive. Optional Defender exclusion for the data and repo folders. |
 | Env | `uv` + Python 3.11 | `requirements.txt` pins `ultralytics==8.4.215`. torch is installed per machine. |
 | Dev machine | Mac (8 GB) | Code, tests, docs, CPU smoke tests. No real training. |
-| Mac ↔ LOQ | Tailscale (free) + SSH / VS Code Remote | Watch runs from the Mac. |
+| Mac ↔ LOQ | **Claude Remote Control** (Mac session `saxmachine-a3` ↔ LOQ session) + git | Messages for coordination, git for anything lasting. |
 | Experiments outside the lineage | Kaggle (P100/T4, ~30 GPU-h/week, phone verification only), Colab free | Dev-sim proxy runs (§6). Data uploaded as a **private** dataset subset. |
 | Alerts | `ntfy.sh` (free) | Phone ping on epoch milestones or a crash. |
 | Code | GitHub **private** repo | Kept private until after 17 Dec (rules: no sharing). |
@@ -252,4 +252,6 @@ No DETRs (slow from scratch). No self-supervised pre-stage (breaks "A first"). N
   - **P1 started:** pause/resume control panel (`anveshak/control.py`, localhost:8765). Pause = clean exit right after the epoch's `last.pt` save; Resume = `--resume last.pt`. Tested live: paused after epoch 1/4, resumed 2→4, finished; a double-click spawns only one process.
   - Added a **Stop now** button (SIGTERM → clean stop, resumable). The val split is frozen in `splits/` (A 952 tiles, B 172), so it's identical on every machine.
   - LOQ setup is packaged: `scripts/loq/setup_wsl.sh` (env, cu128, data, convert, Windows desktop shortcut + startup panel + power settings) and `docs/LOQ_HANDOFF.md`, the task list for the Claude session on the LOQ. Coordination between the Mac and LOQ sessions goes through this repo.
-  - **Next (P1, on the LOQ):** WSL2 + cu128 torch, download `round1.zip`, `convert.py`, scale benchmark, insurance baseline.
+  - Remote Control is connected between the Mac and LOQ sessions. The LOQ turned out to be **native Windows 11 with no WSL**, so the setup switched to native Windows: `scripts/loq/setup_windows.ps1` plus the desktop "Anveshak Training" shortcut (`open_panel.ps1`).
+  - The panel is now cross-platform: Stop = a `STOP` flag checked every batch (no signals), the alive check uses psutil, and `train.py --detach` uses `spawn()` (Windows: hidden console + breakaway from the shell's job). Tested on the Mac: detach → stop → resume → pause.
+  - **Next (P1, on the LOQ):** run `docs/LOQ_HANDOFF.md` (setup, button test, s/m benchmark). Mac: `infer.py` + insurance baseline.
