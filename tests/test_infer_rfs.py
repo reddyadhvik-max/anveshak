@@ -38,3 +38,19 @@ def test_repeat_factors():
     tiles = [{0}] * 98 + [{0, 1}, set()]  # class 1 is in 1% of tiles
     r = repeat_factors(tiles, thr=0.04)
     assert r[0] == 1.0 and r[-1] == 1.0 and abs(r[98] - 2.0) < 1e-9  # sqrt(0.04 / 0.01)
+
+
+def test_mine_select():
+    from tools.mine import select
+    pp = dict(obj=0.5, known_max=0.2, iou_gt=0.3, max_area=0.25, tile_area=1024 ** 2, max_per_tile=100,
+              min_side=4, max_side=200)
+    gt = torch.tensor([[40., 40., 60., 60.]])
+    dets = select(head([
+        (300, 300, 20, 20, {OBJ_SLOT: 0.9}),            # mined
+        (302, 300, 20, 20, {OBJ_SLOT: 0.8}),            # duplicate: NMS
+        (50, 50, 20, 20, {OBJ_SLOT: 0.9}),              # on a GT box
+        (500, 500, 20, 20, {OBJ_SLOT: 0.9, 3: 0.6}),    # looks like a known class
+        (700, 700, 20, 20, {OBJ_SLOT: 0.3}),            # not confident
+        (512, 512, 600, 600, {OBJ_SLOT: 0.9}),          # too big
+    ]), gt, pp)
+    assert dets[:, :4].tolist() == [[290.0, 290.0, 310.0, 310.0]]
