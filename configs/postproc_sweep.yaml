@@ -1,0 +1,8 @@
+# Post-processing for anveshak.infer. Starting values; P3 tunes unknown_* (and known_iou) on val OE.
+known_conf: 0.001     # low: mAP is ranked, extra low-score boxes only help
+known_iou: 0.6        # per-class NMS
+max_candidates: 30000 # pre-NMS cap per tile
+max_known: 700
+unknown_conf: 0.05    # sweep only: keep low-score unknowns, oe_score --sweep filters them
+unknown_iou: 0.5
+max_unknown: 300

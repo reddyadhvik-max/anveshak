@@ -77,6 +77,7 @@ def main():
     ap.add_argument("--postproc", default=str(REPO / "configs" / "postproc.yaml"))
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--raw", action="store_true", help="skip the conflict rule (for oe_score --sweep, which applies it per threshold)")
     ap.add_argument("--validator", help="validate_predictions.py; run it on the CSV when given")
     a = ap.parse_args()
     a.device = f"cuda:{a.device}" if a.device.isdigit() else a.device  # Ultralytics-style --device 0
@@ -102,7 +103,8 @@ def main():
                              "box": [x1, y1, x2, y2], "row": len(rows)})
             if (n + 1) % 100 == 0:
                 print(f"{n + 1}/{len(tiles)} tiles", flush=True)
-    rows = apply_conflict_rule(rows)
+    if not a.raw:
+        rows = apply_conflict_rule(rows)
     n = write_csv(((r["tile"], r["label"], r["score"], *r["box"]) for r in rows), a.out, sizes)
     print(f"wrote {n} rows for {len(tiles)} tiles to {a.out}")
     if a.validator:
