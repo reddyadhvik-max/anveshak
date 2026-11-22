@@ -77,6 +77,7 @@ def main():
     ap.add_argument("--postproc", default=str(REPO / "configs" / "postproc.yaml"))
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--set", nargs="*", default=[], help="override postproc values, e.g. unknown_conf=0.4")
     ap.add_argument("--raw", action="store_true", help="skip the conflict rule (for oe_score --sweep, which applies it per threshold)")
     ap.add_argument("--validator", help="validate_predictions.py; run it on the CSV when given")
     a = ap.parse_args()
@@ -84,6 +85,7 @@ def main():
 
     from ultralytics.utils import YAML
     pp = YAML.load(a.postproc)
+    pp.update({k: float(v) if "." in v else int(v) for k, v in (kv.split("=", 1) for kv in a.set)})
     names = {}
     for p in a.classes:
         names.update({int(r["class_id"]): r["label"] for r in csv.DictReader(open(p, encoding="utf-8")) if r["label"] != UNKNOWN})

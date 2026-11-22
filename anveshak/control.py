@@ -113,13 +113,44 @@ def runs():
     return sorted((r for r in RUNS.glob("*") if (r / "state.json").exists()), key=lambda r: r.stat().st_mtime, reverse=True)
 
 
-COLORS = {"running": "#1a7f37", "pausing": "#9a6700", "paused": "#0969da", "finished": "#6e7781", "stopped": "#cf222e", "stopping": "#cf222e"}
+COLORS = {"failed": "#cf222e", "running": "#1a7f37", "pausing": "#9a6700", "paused": "#0969da", "finished": "#6e7781", "stopped": "#cf222e", "stopping": "#cf222e"}
+
+
+def pipeline_card(r, i):
+    from anveshak.pipeline import done_list, load_steps
+    done = done_list()
+    cur = json.loads((r / "current.json").read_text())["step"] if (r / "current.json").exists() else None
+    try:
+        steps = load_steps()
+    except Exception as e:  # a half-edited step file must not take the panel down
+        steps, cur = [], f"step file unreadable: {e}"
+    rows = []
+    for s in steps:
+        n = s["name"]
+        st = "done" if n in done else ("now: " + i["state"] if n == cur else "to do")
+        cls = "" if n in done else ("now" if n == cur else "todo")
+        rows.append(f'<tr class="{cls}"><td>{html.escape(n)}</td><td>{"training" if "train" in s else "task"}</td><td>{st}</td></tr>')
+    stop = ('<button name="a" value="stop" style="margin-left:8px;border-color:#cf222e;color:#cf222e" '
+            'onclick="return confirm(\'Stop now? A training step keeps its last epoch checkpoint; a task step reruns on Resume.\')">Stop now</button>')
+    btn = {"running": '<button name="a" value="pause">Pause (after this epoch / task)</button>' + stop,
+           "pausing": '<button name="a" value="unpause">Cancel pause</button>' + stop}.get(i["state"], "")
+    if i["state"] in ("paused", "stopped", "failed"):
+        btn = '<button name="a" value="resume">Resume pipeline</button>'
+    return f"""<div class="card"><h2>pipeline (back-to-back)
+<span class="pill" style="background:{COLORS[i['state']]}">{i['state']}</span></h2>
+<p><b>{len([s for s in steps if s['name'] in done])}</b> of <b>{len(steps)}</b> steps done &middot; state since {i['time']}</p>
+<table><tr><th>step</th><th>kind</th><th>status</th></tr>{''.join(rows)}</table>
+<form method="post"><input type="hidden" name="run" value="pipeline">{btn}</form>
+<details><summary>log</summary><pre>{html.escape(tail(r / 'train.log'))}</pre></details></div>"""
 
 
 def page():
     cards = []
     for r in runs():
         i = run_info(r)
+        if r.name == "pipeline":
+            cards.insert(0, pipeline_card(r, i))
+            continue
         btn = ""
         stop = ('<button name="a" value="stop" style="margin-left:8px;border-color:#cf222e;color:#cf222e" '
                 'onclick="return confirm(\'Stop now? The epoch in progress is lost; you can resume from the last checkpoint.\')">Stop now</button>')
@@ -127,7 +158,7 @@ def page():
             btn = '<button name="a" value="pause">Pause after this epoch</button>' + stop
         elif i["state"] == "pausing":
             btn = '<button name="a" value="unpause">Cancel pause</button>' + stop
-        elif i["state"] in ("paused", "stopped") and i["resumable"]:
+        elif i["state"] in ("paused", "stopped", "failed") and i["resumable"]:
             btn = '<button name="a" value="resume">Resume</button>'
         cards.append(f"""<div class="card"><h2>{html.escape(i['name'])}
 <span class="pill" style="background:{COLORS[i['state']]}">{i['state']}</span></h2>
@@ -155,14 +186,29 @@ def act(name, action):
     run = next((r for r in runs() if r.name == name), None)  # only existing runs; no paths from the request
     if run is None:
         return
+    pipe = RUNS / "pipeline"
+    if action == "resume" and run != pipe and (run / "PIPELINE").exists() and (pipe / "state.json").exists():
+        run = pipe  # a stage owned by the pipeline resumes through it, so the following steps still run
     state = run_info(run)["state"]
+    if run == pipe:
+        if action == "pause" and state == "running":
+            (run / "PAUSE").touch()
+        elif action == "stop" and state in ("running", "pausing"):
+            (run / "STOP").touch()
+        elif action == "unpause":
+            (run / "PAUSE").unlink(missing_ok=True)
+        elif action == "resume" and state in ("paused", "stopped", "failed"):
+            for f in ("PAUSE", "STOP"):
+                (run / f).unlink(missing_ok=True)
+            spawn([sys.executable, "-m", "anveshak.pipeline"], run)
+        return
     if action == "pause" and state == "running":
         (run / "PAUSE").touch()
     elif action == "stop" and state in ("running", "pausing"):
         (run / "STOP").touch()  # train.py checks it every batch and stops like Ctrl+C
     elif action == "unpause":
         (run / "PAUSE").unlink(missing_ok=True)
-    elif action == "resume" and state in ("paused", "stopped"):
+    elif action == "resume" and state in ("paused", "stopped", "failed"):
         for f in ("PAUSE", "STOP"):
             (run / f).unlink(missing_ok=True)
         spawn([sys.executable, "-m", "anveshak.train", "--resume", str(run / "weights" / "last.pt")], run)

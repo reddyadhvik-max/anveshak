@@ -54,3 +54,25 @@ def test_mine_select():
         (512, 512, 600, 600, {OBJ_SLOT: 0.9}),          # too big
     ]), gt, pp)
     assert dets[:, :4].tolist() == [[290.0, 290.0, 310.0, 310.0]]
+
+
+def test_pick_threshold():
+    from tools.oe_score import pick
+    res = [(0.1, {"U-Prec": 0.3, "U-F1": 0.40}), (0.3, {"U-Prec": 0.55, "U-F1": 0.45}), (0.5, {"U-Prec": 0.7, "U-F1": 0.35})]
+    assert pick(res, 0.5) == 0.3      # lowest threshold reaching the precision target (mining)
+    assert pick(res, 0.9) == 0.5      # none reach it: the most precise
+    assert pick(res) == 0.3           # best U-F1 (submission)
+
+
+def test_pipeline_placeholders(tmp_path, monkeypatch):
+    from anveshak import pipeline
+    monkeypatch.setenv("ANVESHAK_DATA", "/data")
+    (pipeline.REPO / "runs" / "eval").mkdir(parents=True, exist_ok=True)
+    f = pipeline.REPO / "runs" / "eval" / "_t.txt"
+    f.write_text("0.4\n")
+    try:
+        assert pipeline.expand(["python", "{D}/x", "--obj", "{read:runs/eval/_t.txt}", "k={read:runs/eval/_t.txt}"])[1:] == \
+            ["/data/x", "--obj", "0.4", "k=0.4"]
+    finally:
+        f.unlink()
+    assert len(pipeline.load_steps()) >= 13

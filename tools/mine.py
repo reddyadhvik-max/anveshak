@@ -69,6 +69,8 @@ def main():
     ap.add_argument("--max-per-tile", type=int, default=100)
     ap.add_argument("--qa", type=int, default=50, help="overlay images for visual QA")
     ap.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--min-mean", type=float, default=0.0, help="fail (needs a human) if fewer mined boxes per tile")
+    ap.add_argument("--max-mean", type=float, default=1e9, help="fail (needs a human) if more mined boxes per tile")
     ap.add_argument("--limit", type=int, help="only the first N tiles (smoke test)")
     a = ap.parse_args()
     data = YAML.load(a.data)
@@ -125,6 +127,9 @@ def main():
                 cv2.putText(im, f"{o:.2f}", (b[0], max(b[1] - 3, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
             cv2.imwrite(str(qa / f"{img.stem}.jpg"), im)
         print(f"QA overlays (green GT, red mined): {qa.resolve()}")
+    if not a.min_mean <= c.mean() <= a.max_mean:
+        raise SystemExit(f"mined {c.mean():.2f} boxes per tile, outside [{a.min_mean}, {a.max_mean}]: check runs/mine_qa, "
+                         "then re-run with another --obj or widen the bounds")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,48 @@
+# Round 1, back to back: python -m anveshak.pipeline --detach   (panel card "pipeline": Pause / Stop now / Resume)
+# Steps run in order; finished ones are recorded in runs/pipeline/done.json. Append new steps at the end (never rename
+# a finished one). {D} = data root, {read:path} = contents of a file written by an earlier step.
+steps:
+  # --- Stage A evaluation and an insurance submission ---
+  - name: infer_A_val
+    cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val.csv]
+  - name: score_A_val
+    cmd: [python, tools/oe_score.py, runs/eval/A_val.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: infer_B_val_raw
+    cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --out, runs/eval/B_val_raw.csv]
+  - name: sweep_B_val          # Set B classes are genuine unknowns to the A model; picks the mining threshold (U-Prec >= 0.5)
+    cmd: [python, tools/oe_score.py, runs/eval/B_val_raw.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, --pick-prec, 0.5, --pick-out, runs/eval/mine_obj.txt]
+  - name: insurance_A
+    cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --out, runs/submissions/insurance_A.csv, --validator, "{D}/validate_predictions.py"]
+  # --- P3: unknown mining + A_mine ---
+  - name: mine
+    cmd: [python, -m, tools.mine, --weights, runs/A/weights/best.pt, --data, "{D}/yolo/data_A.yaml", --obj, "{read:runs/eval/mine_obj.txt}",
+          --min-mean, 0.1, --max-mean, 10]
+  - name: rfs_mine
+    cmd: [python, tools/rfs.py, "{D}/yolo/data_A_mine.yaml"]
+  - name: A_mine
+    train: A_mine
+    cmd: [python, -m, anveshak.train, --name, A_mine, --data, "{D}/yolo/data_A_mine_rfs.yaml", --from, runs/A/weights/best.pt,
+          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, save_period=25]
+  # --- A_mine evaluation; picks the submission unknown threshold (best U-F1) ---
+  - name: infer_A_val_mine
+    cmd: [python, -m, anveshak.infer, --weights, runs/A_mine/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_mine.csv]
+  - name: score_A_val_mine
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_mine.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: infer_B_val_raw_mine
+    cmd: [python, -m, anveshak.infer, --weights, runs/A_mine/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --out, runs/eval/B_val_raw_mine.csv]
+  - name: sweep_B_val_mine
+    cmd: [python, tools/oe_score.py, runs/eval/B_val_raw_mine.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, --pick-out, runs/eval/unk_conf_mine.txt]
+  - name: insurance_A_mine
+    cmd: [python, -m, anveshak.infer, --weights, runs/A_mine/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --set, "unknown_conf={read:runs/eval/unk_conf_mine.txt}",
+          --out, runs/submissions/insurance_A_mine.csv, --validator, "{D}/validate_predictions.py"]
+  # --- P4 (Set B) steps get appended here once the tooling lands ---

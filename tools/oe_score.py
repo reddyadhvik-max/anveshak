@@ -120,6 +120,14 @@ def score(preds, gts, known_labels):
             "skipped_classes": sorted(set(known_labels) - set(ap))}
 
 
+def pick(res, min_prec=None):
+    """res: [(threshold, score dict)]. Lowest threshold reaching min_prec (else the most precise one), or best U-F1."""
+    if min_prec is not None:
+        ok = [t for t, r in res if r["U-Prec"] >= min_prec]
+        return min(ok) if ok else max(res, key=lambda tr: (tr[1]["U-Prec"], tr[0]))[0]
+    return max(res, key=lambda tr: (tr[1]["U-F1"], tr[0]))[0]
+
+
 def read_preds(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         return [{"tile": r["image_id"], "label": r["class_name"], "score": float(r["score"]),
@@ -152,15 +160,24 @@ def main():
     ap.add_argument("--tiles", required=True, help="txt with one tile_id per line")
     ap.add_argument("--classes", required=True, nargs="+")
     ap.add_argument("--as-unknown", nargs="*", default=[])
+    ap.add_argument("--pick-out", help="write the chosen threshold here")
+    ap.add_argument("--pick-prec", type=float, help="choose the lowest threshold with U-Prec >= this (mining); default: best U-F1")
     ap.add_argument("--sweep", nargs="*", type=float, help="unknown score thresholds to try (preds from infer --raw)")
     a = ap.parse_args()
     tiles = [l.strip() for l in open(a.tiles) if l.strip()]
     preds, gts, known = read_preds(a.preds), read_gts(a.labels, tiles, a.as_unknown), read_known(a.classes, a.as_unknown)
     if a.sweep:
         print("unk_thr  mAP_K   U-Rec   U-Prec  U-F1    OE      n_unk")
+        res = []
         for t in a.sweep:
             r = score([p for p in preds if p["label"] != UNKNOWN or p["score"] >= t], gts, known)
+            res.append((t, r))
             print(f"{t:<8.2f} {r['mAP_K']:.4f}  {r['U-Rec']:.4f}  {r['U-Prec']:.4f}  {r['U-F1']:.4f}  {r['OE']:6.2f}  {r['n_unknown_pred']}")
+        if a.pick_out:
+            t = pick(res, a.pick_prec)
+            Path(a.pick_out).parent.mkdir(parents=True, exist_ok=True)
+            Path(a.pick_out).write_text(f"{t}\n")
+            print(f"picked {t} -> {a.pick_out}")
         return
     r = score(preds, gts, known)
     print(json.dumps({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items() if k != "AP"}, indent=1))

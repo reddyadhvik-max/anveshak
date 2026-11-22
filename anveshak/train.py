@@ -139,8 +139,11 @@ def main():
         model.train(**train_kwargs)
     except SystemExit:
         raise
+    except KeyboardInterrupt:
+        set_state(run, "stopped")  # Stop now / Ctrl+C: last.pt is still resumable
+        raise
     except BaseException:
-        set_state(run, "stopped")  # crash or Ctrl+C: last.pt is still resumable
+        set_state(run, "failed")  # a crash: last.pt (if any) is still resumable once the cause is fixed
         raise
     set_state(run, "finished")
 
