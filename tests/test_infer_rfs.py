@@ -103,3 +103,18 @@ def test_copypaste_transform_tracks_box():
         inside = c[y1:y2, x1:x2, 0]
         assert inside.mean() > 200 and (c[..., 0] > 128).sum() <= inside.size * 1.2  # box = the white object (bilinear edges blur ~1 px)
     assert free((0, 0, 10, 10), [(10, 0, 20, 10)]) and not free((0, 0, 11, 10), [(10, 0, 20, 10)])
+
+
+def test_copypaste_feather():
+    import numpy as np
+    from tools.copypaste import feather
+    al = feather(np.zeros((30, 40, 3)), (10, 5, 30, 25))
+    assert (al[5:25, 10:30] == 1).all()                       # the object itself is pasted as is
+    assert al[0, 0] < 0.15 and al[:, 0].max() < 0.1 and al[0].max() < 0.15  # edges fade into the background
+
+
+def test_pick_variant_choose():
+    from tools.pick_variant import choose
+    r = {"B": (0.2517, 0.0786), "B2": (0.2400, 0.1200), "B3": (0.2490, 0.0950)}
+    assert choose(r, 0.01) == "B3"     # B2 is best on few-shot but lost too much on base classes
+    assert choose(r, 0.02) == "B2"

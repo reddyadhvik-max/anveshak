@@ -51,11 +51,14 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--limit", type=int, help="only the first N tiles (smoke test)")
+    ap.add_argument("--all", action="store_true", help="use Set B train + val (final stage, after variants are chosen)")
+    ap.add_argument("--tag", default="", help="suffix for the outputs, e.g. _all -> data_B_mix_all.yaml")
     a = ap.parse_args()
     data, replay = YAML.load(a.data), YAML.load(a.replay)
-    imgs = [Path(l.strip()) for l in open(data["train"]) if l.strip()][: a.limit]
+    lists = [data["train"], data["val"]] if a.all else [data["train"]]
+    imgs = [Path(l.strip()) for f in lists for l in open(f) if l.strip()][: a.limit]
     txts = [Path(p) for p in img2label_paths([str(i) for i in imgs])]
-    dst = imgs[0].parent.parent.with_name(imgs[0].parent.parent.name + "_pseudo")
+    dst = imgs[0].parent.parent.with_name(imgs[0].parent.parent.name + "_pseudo" + a.tag)
     for d in ("images", "labels"):
         (dst / d).mkdir(parents=True, exist_ok=True)
 
@@ -93,13 +96,14 @@ def main():
     rep = [l.strip() for l in open(replay["train"]) if l.strip()]
     train = [str(dst / "images" / i.name) for i in imgs] * a.repeat + random.Random(a.seed).sample(rep, min(a.replay_n, len(rep)))
     yolo = Path(data["train"]).parent
-    (yolo / "dataset_B_mix_train.txt").write_text("\n".join(train) + "\n")
+    lst = yolo / f"dataset_B_mix{a.tag}_train.txt"
+    lst.write_text("\n".join(train) + "\n")
     vals = [l for v in (replay["val"], data["val"]) for l in open(v) if l.strip()]
     (yolo / "dataset_AB_val.txt").write_text("".join(vals))
-    YAML.save(a.data.with_name("data_B_mix.yaml"),
-              {**data, "train": str(yolo / "dataset_B_mix_train.txt"), "val": str(yolo / "dataset_AB_val.txt")})
+    YAML.save(a.data.with_name(f"data_B_mix{a.tag}.yaml"),
+              {**data, "train": str(lst), "val": str(yolo / "dataset_AB_val.txt")})
     print(f"train {len(train)} samples ({len(imgs)} B x{a.repeat} + {len(train) - len(imgs) * a.repeat} A replay), "
-          f"val {len(vals)} tiles; wrote data_B_mix.yaml")
+          f"val {len(vals)} tiles; wrote data_B_mix{a.tag}.yaml")
 
 
 if __name__ == "__main__":

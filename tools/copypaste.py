@@ -15,6 +15,15 @@ from pathlib import Path
 import numpy as np
 
 
+def feather(crop, box):
+    """Alpha (H, W): 1 on the object box, falling linearly to 0 at the crop edge across the context margin."""
+    h, w = crop.shape[:2]
+    x, y = np.arange(w) + 0.5, np.arange(h) + 0.5
+    ax = np.clip(np.minimum(x / max(box[0], 1), (w - x) / max(w - box[2], 1)), 0, 1)
+    ay = np.clip(np.minimum(y / max(box[1], 1), (h - y) / max(h - box[3], 1)), 0, 1)
+    return np.minimum(ay[:, None], ax[None, :])
+
+
 def transform(crop, box, rnd):
     """crop: HxWx3, box: (x1, y1, x2, y2) of the object inside it. Returns the augmented (crop, box)."""
     mask = np.zeros(crop.shape[:2], np.uint8)
@@ -58,12 +67,16 @@ def main():
     ap.add_argument("--n", type=int, default=1500, help="pasted tiles to make")
     ap.add_argument("--per-tile", type=int, default=3, help="max pastes per tile")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--feather", action="store_true", help="blend the context margin into the background (no hard patch edge)")
+    ap.add_argument("--all", action="store_true", help="crops from Set B train + val (final stage)")
+    ap.add_argument("--tag", default="", help="output suffix: dataset_B_cp<tag>, <mix stem>_cp<tag>.yaml")
     a = ap.parse_args()
     rnd = random.Random(a.seed)
     data, bg, mix = YAML.load(a.data), YAML.load(a.bg), YAML.load(a.mix)
 
     crops = {}  # class -> [(crop, box in crop)]
-    for img in (l.strip() for l in open(data["train"]) if l.strip()):
+    lists = [data["train"], data["val"]] if a.all else [data["train"]]
+    for img in (l.strip() for f in lists for l in open(f) if l.strip()):
         im = cv2.imread(img)
         h, w = im.shape[:2]
         rows, boxes = yolo_boxes(img2label_paths([img])[0], w, h)
@@ -79,7 +92,7 @@ def main():
 
     bgs = [l.strip() for l in open(bg["train"]) if l.strip()]
     first = Path(bgs[0])
-    dst = first.parent.parent.with_name("dataset_B_cp")
+    dst = first.parent.parent.with_name("dataset_B_cp" + a.tag)
     for d in ("images", "labels"):
         (dst / d).mkdir(parents=True, exist_ok=True)
     out, pasted = [], 0
@@ -98,7 +111,11 @@ def main():
             for _ in range(30):  # find free space
                 x, y = rnd.randrange(w - cw), rnd.randrange(h - ch)
                 if free((x, y, x + cw, y + ch), taken):
-                    im[y:y + ch, x:x + cw] = crop
+                    if a.feather:
+                        al = feather(crop, (bx1, by1, bx2, by2))[..., None]
+                        im[y:y + ch, x:x + cw] = (al * crop + (1 - al) * im[y:y + ch, x:x + cw]).round().astype(im.dtype)
+                    else:
+                        im[y:y + ch, x:x + cw] = crop
                     taken.append((x, y, x + cw, y + ch))
                     X1, Y1, X2, Y2 = x + bx1, y + by1, x + bx2, y + by2
                     lines.append(f"{c} {(X1 + X2) / 2 / w:.6f} {(Y1 + Y2) / 2 / h:.6f} {(X2 - X1) / w:.6f} {(Y2 - Y1) / h:.6f}")
@@ -109,10 +126,11 @@ def main():
         (dst / "labels" / f"{name}.txt").write_text("\n".join(lines) + ("\n" if lines else ""))
         out.append(str(dst / "images" / f"{name}.png"))
     train = Path(mix["train"])
-    lst = train.with_name("dataset_B_mix_cp_train.txt")
+    lst = train.with_name(f"{train.stem.removesuffix('_train')}_cp{a.tag}_train.txt")
     lst.write_text(train.read_text().rstrip("\n") + "\n" + "\n".join(out) + "\n")
-    YAML.save(a.mix.with_name("data_B_mix_cp.yaml"), {**mix, "train": str(lst)})
-    print(f"pasted {pasted} few-shot objects into {len(out)} Set A tiles; wrote data_B_mix_cp.yaml")
+    out_yaml = a.mix.with_name(f"{a.mix.stem}_cp{a.tag}.yaml")
+    YAML.save(out_yaml, {**mix, "train": str(lst)})
+    print(f"pasted {pasted} few-shot objects into {len(out)} Set A tiles; wrote {out_yaml.name}")
 
 
 if __name__ == "__main__":

@@ -77,3 +77,42 @@ steps:
   - name: r1_B2
     cmd: [python, -m, anveshak.infer, --weights, runs/B2/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
           --classes, "{D}/class_list.csv", --out, runs/submissions/r1_B2.csv, --validator, "{D}/validate_predictions.py"]
+  # --- B3 variant: copy-paste with feathered edges (the hard rectangles of B2 could teach "patch edge = object") ---
+  - name: copypaste_f
+    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix.yaml",
+          --n, 1500, --feather, --tag, _f]
+  - name: B3
+    train: B3
+    cmd: [python, -m, anveshak.train, --name, B3, --data, "{D}/yolo/data_B_mix_cp_f.yaml", --from, runs/A/weights/best.pt,
+          epochs=60, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=20]
+  - name: infer_A_val_B3
+    cmd: [python, -m, anveshak.infer, --weights, runs/B3/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_B3.csv]
+  - name: infer_B_val_B3
+    cmd: [python, -m, anveshak.infer, --weights, runs/B3/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/B_val_B3.csv]
+  # --- Final stage: the winning recipe on ALL Set B tiles (train + val), from the same A checkpoint (PLAN 5.5) ---
+  - name: pseudo_B_all
+    cmd: [python, -m, tools.pseudo, --weights, runs/A/weights/best.pt, --data, "{D}/yolo/data_B.yaml", --replay, "{D}/yolo/data_A_rfs.yaml",
+          --all, --tag, _all]
+  - name: copypaste_all
+    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_all.yaml",
+          --n, 1500, --all, --tag, _all]
+  - name: copypaste_all_f
+    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_all.yaml",
+          --n, 1500, --all, --feather, --tag, _all_f]
+  - name: pick_variant           # best B-val few-shot mAP_K among variants within 0.01 of the best A-val base mAP_K
+    cmd: [python, -m, tools.pick_variant, --root, "{D}", --variant, B, data_B_mix_all.yaml, --variant, B2, data_B_mix_all_cp_all.yaml,
+          --variant, B3, data_B_mix_all_cp_all_f.yaml, --out, runs/eval/final_data.txt]
+  - name: B_final              # B-val is in training now, so its val numbers are optimistic and last.pt is the deliverable
+    train: B_final
+    cmd: [python, -m, anveshak.train, --name, B_final, --data, "{read:runs/eval/final_data.txt}", --from, runs/A/weights/best.pt,
+          epochs=60, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=20]
+  - name: infer_A_val_final    # retention check (A-val is still held out)
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_final.csv]
+  - name: score_A_val_final
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_final.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: r1_final
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --out, runs/submissions/r1_final.csv, --validator, "{D}/validate_predictions.py"]
