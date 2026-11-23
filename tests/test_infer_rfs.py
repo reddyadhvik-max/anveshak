@@ -60,7 +60,7 @@ def test_pick_threshold():
     from tools.oe_score import pick
     res = [(0.1, {"U-Prec": 0.3, "U-F1": 0.40}), (0.3, {"U-Prec": 0.55, "U-F1": 0.45}), (0.5, {"U-Prec": 0.7, "U-F1": 0.35})]
     assert pick(res, 0.5) == 0.3      # lowest threshold reaching the precision target (mining)
-    assert pick(res, 0.9) == 0.5      # none reach it: the most precise
+    assert pick(res, 0.9) is None     # none reach it: refuse, no silent fallback
     assert pick(res) == 0.3           # best U-F1 (submission)
 
 

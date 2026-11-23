@@ -11,16 +11,17 @@ steps:
   - name: infer_B_val_raw
     cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
           --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --out, runs/eval/B_val_raw.csv]
-  - name: sweep_B_val          # Set B classes are genuine unknowns to the A model; picks the mining threshold (U-Prec >= 0.5)
+  - name: sweep_B_val          # Set B classes are genuine unknowns to the A model (proxy: B tiles lack A-class labels, so U-Prec is pessimistic)
     cmd: [python, tools/oe_score.py, runs/eval/B_val_raw.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
           --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
           --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, --pick-prec, 0.5, --pick-out, runs/eval/mine_obj.txt]
   - name: insurance_A
     cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
           --classes, "{D}/class_list.csv", --out, runs/submissions/insurance_A.csv, --validator, "{D}/validate_predictions.py"]
-  # --- P3: unknown mining + A_mine ---
+  # --- P3: unknown mining + A_mine. configs/mine_obj.txt is set by hand from visual QA of mining probes on A train
+  #     (the B-val proxy reached only ~1% U-Prec, 23 Nov); until it exists the mine step fails safely. ---
   - name: mine
-    cmd: [python, -m, tools.mine, --weights, runs/A/weights/best.pt, --data, "{D}/yolo/data_A.yaml", --obj, "{read:runs/eval/mine_obj.txt}",
+    cmd: [python, -m, tools.mine, --weights, runs/A/weights/best.pt, --data, "{D}/yolo/data_A.yaml", --obj, "{read:configs/mine_obj.txt}",
           --min-mean, 0.1, --max-mean, 10]
   - name: rfs_mine
     cmd: [python, tools/rfs.py, "{D}/yolo/data_A_mine.yaml"]

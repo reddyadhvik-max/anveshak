@@ -121,10 +121,10 @@ def score(preds, gts, known_labels):
 
 
 def pick(res, min_prec=None):
-    """res: [(threshold, score dict)]. Lowest threshold reaching min_prec (else the most precise one), or best U-F1."""
+    """res: [(threshold, score dict)]. Lowest threshold reaching min_prec (None if none does), or best U-F1."""
     if min_prec is not None:
         ok = [t for t, r in res if r["U-Prec"] >= min_prec]
-        return min(ok) if ok else max(res, key=lambda tr: (tr[1]["U-Prec"], tr[0]))[0]
+        return min(ok) if ok else None
     return max(res, key=lambda tr: (tr[1]["U-F1"], tr[0]))[0]
 
 
@@ -175,6 +175,8 @@ def main():
             print(f"{t:<8.2f} {r['mAP_K']:.4f}  {r['U-Rec']:.4f}  {r['U-Prec']:.4f}  {r['U-F1']:.4f}  {r['OE']:6.2f}  {r['n_unknown_pred']}")
         if a.pick_out:
             t = pick(res, a.pick_prec)
+            if t is None:  # never fall back silently: a later step would consume a bad threshold
+                raise SystemExit(f"no threshold reaches U-Prec {a.pick_prec}; nothing written to {a.pick_out}")
             Path(a.pick_out).parent.mkdir(parents=True, exist_ok=True)
             Path(a.pick_out).write_text(f"{t}\n")
             print(f"picked {t} -> {a.pick_out}")
