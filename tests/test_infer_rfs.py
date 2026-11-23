@@ -76,3 +76,17 @@ def test_pipeline_placeholders(tmp_path, monkeypatch):
     finally:
         f.unlink()
     assert len(pipeline.load_steps()) >= 13
+
+
+def test_pseudo_select():
+    import torch
+    from tools.pseudo import select
+    gt = torch.tensor([[0., 0, 10, 10]])
+    dets = [(3, 0.9, 100, 100, 120, 120),   # confident -> label
+            (4, 0.2, 200, 200, 220, 220),   # weak, free -> blank
+            (5, 0.2, 5, 5, 15, 15),         # weak but touches GT -> left alone
+            (6, 0.2, 110, 110, 130, 130),   # weak but touches a pseudo-label -> left alone
+            (7, 0.05, 300, 300, 310, 310)]  # below lo (postprocess already drops these) -> ignored
+    lab, blank = select(dets, gt, hi=0.4, lo=0.1)
+    assert lab == [(3, [100, 100, 120, 120])]
+    assert blank == [[200., 200., 220., 220.]]
