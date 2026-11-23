@@ -3,7 +3,7 @@ known_conf: 0.001     # low: mAP is ranked, extra low-score boxes only help
 known_iou: 0.6        # per-class NMS
 max_candidates: 30000 # pre-NMS cap per tile
 max_known: 900
-unknown_conf: 0.30    # high: U-F1 is unranked, so every unknown box counts against precision
+unknown_conf: 0.05    # with the size floor and per-tile cap below (A-model B-val proxy grid, 23 Nov: U-F1 0.023 -> 0.170)
 unknown_iou: 0.5
-unknown_min_side: 0  # px, sqrt-area; tuned on the B-val proxy (tiny unknowns are mostly missed base objects)
-max_unknown: 100      # max_known + max_unknown <= 1000 rows per tile (competition cap)
+unknown_min_side: 48  # px, sqrt-area. Proxy peak was 64 (0.189), but 80 collapses; 48 keeps margin (tiny unknowns are mostly missed cars)
+max_unknown: 10       # top-k unknowns per tile; max_known + max_unknown <= 1000 rows per tile (competition cap)

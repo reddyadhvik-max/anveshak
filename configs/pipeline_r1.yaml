@@ -69,3 +69,11 @@ steps:
           --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/B_val_B2.csv]
   - name: score_B_val_B2
     cmd: [python, tools/oe_score.py, runs/eval/B_val_B2.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv"]
+  # --- R1 candidates with the tuned unknown post-processing (postproc.yaml: conf 0.05, min side 48 px, top 10 per tile).
+  #     Pick B or B2 by score_A_val_* / score_B_val_*; the unknown settings are the same for both. ---
+  - name: r1_B_v2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --out, runs/submissions/r1_B_v2.csv, --validator, "{D}/validate_predictions.py"]
+  - name: r1_B2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B2/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --out, runs/submissions/r1_B2.csv, --validator, "{D}/validate_predictions.py"]
