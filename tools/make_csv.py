@@ -3,6 +3,7 @@ import csv
 import subprocess
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 HEADER = ["image_id", "class_name", "score", "xmin", "ymin", "xmax", "ymax"]
 MAX_ROWS = 1000
@@ -20,6 +21,7 @@ def write_csv(rows, path, tile_sizes):
         if x1 < x2 and y1 < y2:
             key = (l, x1, y1, x2, y2)
             per[t][key] = max(s, per[t].get(key, -1))  # same box+label twice: keep the higher score
+    Path(path).parent.mkdir(parents=True, exist_ok=True)  # e.g. runs/submissions/ on a fresh machine
     with open(path, "w", newline="", encoding="utf-8") as f:
         wr = csv.writer(f)
         wr.writerow(HEADER)
