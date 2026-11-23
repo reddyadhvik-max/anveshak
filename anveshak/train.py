@@ -123,7 +123,9 @@ def main():
             model = YOLO(str(tmp))
             prov = {"stage": a.name, "start": "random_init", "scale": a.scale, "seed": a.seed,
                     "init_sha256": patch.weights_sha256(model.model)}
-        kv = {"pretrained": False, "seed": a.seed, "deterministic": True,
+        # pretrained=False makes Ultralytics' Model.train() discard the checkpoint (`weights = None if pretrained is False`),
+        # which silently turned the --from B stage into a random init on 23 Nov. For --from, point it at the checkpoint.
+        kv = {"pretrained": str(a.src) if a.src else False, "seed": a.seed, "deterministic": True,
               "cls": 1.0,  # the objectness slot doubles target_scores_sum; 2x the default cls gain restores the class-loss scale
               "flipud": 0.5, "max_det": 1000, **parse_kv(a.kv)}
         prov["train_args"] = kv
@@ -132,6 +134,17 @@ def main():
         train_kwargs = dict(data=str(Path(a.data).expanduser()), project=str(run.parent), name=a.name, exist_ok=True, **kv)
 
     (run / "provenance.json").write_text(json.dumps(prov, indent=1))
+    if a.src and not a.resume:  # fail loudly unless the stage really starts from the previous checkpoint
+        src_sd = {k: v.detach().float().cpu().clone() for k, v in model.model.state_dict().items()}
+
+        def check_from(trainer):
+            sd = trainer.model.state_dict()
+            bad = [k for k, v in src_sd.items() if k not in sd or not torch.equal(sd[k].detach().float().cpu(), v)]
+            if bad:
+                raise RuntimeError(f"--from {a.src} was not loaded: {len(bad)}/{len(src_sd)} tensors differ, e.g. {bad[:3]}")
+            print(f"--from check: all {len(src_sd)} tensors match {a.src}", flush=True)
+
+        model.add_callback("on_train_start", check_from)
     model.add_callback("on_model_save", pause_after_save)
     model.add_callback("on_train_batch_end", stop_now)
     set_state(run, "running")
