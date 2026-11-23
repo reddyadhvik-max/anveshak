@@ -60,7 +60,8 @@ def postprocess(out, slots, pp):
         dets.append((slots[c], v, *boxes[a].tolist()))
     kmax = sk.amax(1) if len(slots) else torch.zeros(len(s))
     su = torch.maximum(s[:, UNK_SLOT], s[:, OBJ_SLOT] * (1 - kmax))
-    a = (su > pp["unknown_conf"]).nonzero(as_tuple=True)[0]
+    side2 = (boxes[:, 2] - boxes[:, 0]).clamp(min=0) * (boxes[:, 3] - boxes[:, 1]).clamp(min=0)
+    a = ((su > pp["unknown_conf"]) & (side2 >= pp.get("unknown_min_side", 0) ** 2)).nonzero(as_tuple=True)[0]
     keep = nms(boxes[a], su[a], pp["unknown_iou"])[: pp["max_unknown"]]
     for k in a[keep].tolist():
         dets.append((UNK_SLOT, su[k].item(), *boxes[k].tolist()))

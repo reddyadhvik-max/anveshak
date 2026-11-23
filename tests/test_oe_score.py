@@ -49,3 +49,14 @@ def test_class_without_gt_is_skipped():
 
 def test_voc_ap_half():
     assert abs(voc_ap([0, 1], 1) - 0.5) < 1e-9
+
+
+def test_filter_unknowns():
+    from tools.oe_score import filter_unknowns
+    P = lambda t, l, s, side, r: {"tile": t, "label": l, "score": s, "box": [0, 0, side, side], "row": r}
+    preds = [P("a", "car", 0.01, 5, 0), P("a", "unknown", 0.9, 10, 1), P("a", "unknown", 0.8, 40, 2),
+             P("a", "unknown", 0.7, 40, 3), P("b", "unknown", 0.05, 40, 4), P("b", "unknown", 0.6, 40, 5)]
+    rows = lambda ps: sorted(p["row"] for p in ps)
+    assert rows(filter_unknowns(preds, 0.1)) == [0, 1, 2, 3, 5]
+    assert rows(filter_unknowns(preds, 0.1, min_side=20)) == [0, 2, 3, 5]
+    assert rows(filter_unknowns(preds, 0.1, min_side=20, topk=1)) == [0, 2, 5]

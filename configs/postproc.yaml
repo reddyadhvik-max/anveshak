@@ -5,4 +5,5 @@ max_candidates: 30000 # pre-NMS cap per tile
 max_known: 900
 unknown_conf: 0.30    # high: U-F1 is unranked, so every unknown box counts against precision
 unknown_iou: 0.5
+unknown_min_side: 0  # px, sqrt-area; tuned on the B-val proxy (tiny unknowns are mostly missed base objects)
 max_unknown: 100      # max_known + max_unknown <= 1000 rows per tile (competition cap)

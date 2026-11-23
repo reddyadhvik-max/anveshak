@@ -45,3 +45,27 @@ steps:
   - name: r1_B
     cmd: [python, -m, anveshak.infer, --weights, runs/B/weights/best.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
           --classes, "{D}/class_list.csv", --set, unknown_conf=0.1, --out, runs/submissions/r1_B.csv, --validator, "{D}/validate_predictions.py"]
+  # --- 23 Nov evening. Unknown post-processing grid on the honest proxy (A model, classes 30-39 unseen): threshold x
+  #     min size x per-tile cap. CPU only, minutes. The winner goes into postproc.yaml by hand.
+  - name: unk_grid_A
+    cmd: [python, tools/oe_score.py, runs/eval/B_val_raw.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, --min-side, 0, 12, 16, 24, 32, 48, --topk, 0, 3, 5, 10, 20]
+  # --- B2 variant: B mix + 1500 Set A tiles with pasted few-shot objects; same recipe from the same A checkpoint.
+  #     Compare score_B_val_B2 with score_B_val_B (0.0786) and score_A_val_B2 with 0.2517. ---
+  - name: copypaste
+    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix.yaml", --n, 1500]
+  - name: B2
+    train: B2
+    cmd: [python, -m, anveshak.train, --name, B2, --data, "{D}/yolo/data_B_mix_cp.yaml", --from, runs/A/weights/best.pt,
+          epochs=60, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=20]
+  - name: infer_A_val_B2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B2/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_B2.csv]
+  - name: score_A_val_B2
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_B2.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: infer_B_val_B2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B2/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/B_val_B2.csv]
+  - name: score_B_val_B2
+    cmd: [python, tools/oe_score.py, runs/eval/B_val_B2.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv"]

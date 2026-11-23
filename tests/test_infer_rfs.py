@@ -90,3 +90,16 @@ def test_pseudo_select():
     lab, blank = select(dets, gt, hi=0.4, lo=0.1)
     assert lab == [(3, [100, 100, 120, 120])]
     assert blank == [[200., 200., 220., 220.]]
+
+
+def test_copypaste_transform_tracks_box():
+    import random
+    import numpy as np
+    from tools.copypaste import free, transform
+    crop = np.zeros((40, 60, 3), np.uint8)
+    crop[10:20, 5:25] = 255  # the object, box (5, 10, 25, 20)
+    for seed in range(20):
+        c, (x1, y1, x2, y2) = transform(crop, (5, 10, 25, 20), random.Random(seed))
+        inside = c[y1:y2, x1:x2, 0]
+        assert inside.mean() > 200 and (c[..., 0] > 128).sum() <= inside.size * 1.2  # box = the white object (bilinear edges blur ~1 px)
+    assert free((0, 0, 10, 10), [(10, 0, 20, 10)]) and not free((0, 0, 11, 10), [(10, 0, 20, 10)])
