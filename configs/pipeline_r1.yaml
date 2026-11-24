@@ -214,3 +214,38 @@ steps:
   - name: r1_final
     cmd: [python, -m, anveshak.infer, --weights, runs/B_final/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
           --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final.csv, --validator, "{D}/validate_predictions.py"]
+  # --- 25 Nov 03:48: A2 (12 full-data epochs) = 0.3498 A-val vs A 0.2964 (+0.053; the 25%/10-ep arm gave +0.014), so A
+  #     is still undertrained. A3 = A2 + 12 more epochs; the better of A2/A3 seeds a second final stage. r1_final stays
+  #     the insurance CSV. B_final2 hyperparameters can still change after score_A_val_final (forgetting check). ---
+  - name: A3
+    train: A3
+    cmd: [python, -m, anveshak.train, --name, A3, --data, "{read:runs/eval/a2_data.txt}", --from, runs/A2/weights/last.pt,
+          epochs=12, val=False, tile=True, imgsz=640, batch=8, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, close_mosaic=2, scale=0.25]
+  - name: infer_A_val_A3
+    cmd: [python, -m, anveshak.infer, --weights, runs/A3/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_A3.csv]
+  - name: score_A_val_A3
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_A3.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
+  - name: pick_base
+    cmd: [python, -m, tools.pick_data, --root, "{D}", --prefix, ., --arm, A2, runs/A2/weights/last.pt, --arm, A3, runs/A3/weights/last.pt,
+          --out, runs/eval/base.txt]
+  - name: pseudo_B_base
+    cmd: [python, -m, tools.pseudo, --weights, "{read:runs/eval/base.txt}", --data, "{D}/yolo/data_B.yaml", --replay, "{read:runs/eval/a2_data.txt}",
+          --all, --replay-n, 6000, --tag, _base]
+  - name: copypaste_base
+    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_base.yaml",
+          --n, 1500, --all, --tag, _base]
+  - name: B_final2
+    train: B_final2
+    cmd: [python, -m, anveshak.train, --name, B_final2, --data, "{D}/yolo/data_B_mix_base_cp_base.yaml", --from, "{read:runs/eval/base.txt}",
+          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=10]
+  - name: infer_A_val_final2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_final2.csv]
+  - name: score_A_val_final2
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_final2.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
+  - name: r1_final2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final2.csv, --validator, "{D}/validate_predictions.py"]
