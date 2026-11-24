@@ -176,41 +176,41 @@ steps:
   - name: score_abl_tile_s25_rfs05
     cmd: [python, tools/oe_score.py, runs/eval/A_val_abl_tile_s25_rfs05.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
           --classes, "{D}/class_list.csv", --per-class]
-  - name: B4
-    train: B4
-    cmd: [python, -m, anveshak.train, --name, B4, --data, "{D}/yolo/data_B_mix_r6k_cp.yaml", --from, runs/A/weights/best.pt,
-          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=25]
-  - name: infer_A_val_B4
-    cmd: [python, -m, anveshak.infer, --weights, runs/B4/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
-          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_B4.csv]
-  - name: infer_B_val_B4
-    cmd: [python, -m, anveshak.infer, --weights, runs/B4/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
-          --subset, splits/dataset_B_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/B_val_B4.csv]
-  # --- Final stage: the winning recipe on ALL Set B tiles (train + val), from the same A checkpoint (PLAN 5.5) ---
-  - name: pseudo_B_all
-    cmd: [python, -m, tools.pseudo, --weights, runs/A/weights/best.pt, --data, "{D}/yolo/data_B.yaml", --replay, "{D}/yolo/data_A_rfs.yaml",
-          --all, --tag, _all]
-  - name: copypaste_all
-    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_all.yaml",
-          --n, 1500, --all, --tag, _all]
-  - name: pseudo_B_all_r6k
-    cmd: [python, -m, tools.pseudo, --weights, runs/A/weights/best.pt, --data, "{D}/yolo/data_B.yaml", --replay, "{D}/yolo/data_A_rfs.yaml",
-          --all, --replay-n, 6000, --tag, _all_r6k]
-  - name: copypaste_all_r6k
-    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_all_r6k.yaml",
-          --n, 1500, --all, --tag, _all]
-  - name: pick_variant_v2        # best B-val few-shot mAP_K among variants within 0.01 of the best A-val base mAP_K
-    cmd: [python, -m, tools.pick_variant, --root, "{D}", --variant, B, data_B_mix_all.yaml, --variant, B2, data_B_mix_all_cp_all.yaml,
-          --variant, B4, data_B_mix_all_r6k_cp_all.yaml, --out, runs/eval/final_data.txt]
+  # --- 24 Nov 18:36: under ONE postproc, A best.pt (0.2950 A-val) beats B (0.2805) and B2 (0.2842): every B fine-tune
+  #     costs ~0.012 base mAP, and B2's +0.038 was the postproc. abl_ctrl = A, so extra low-lr epochs do nothing;
+  #     tile+s25 is a real +0.014. TTA: +0.014 A-val, +0.017 B-val, proxy U-F1 0.176 -> 0.180. So: B4 dropped;
+  #     A2 = A continued with tile+s25 on full data (RFS list picked by the ablation); B_final from A2 with 6000
+  #     replay tiles (more replay against forgetting); final evals + r1 with TTA. known_max 0.5 in postproc.yaml. ---
+  - name: pick_a2_data
+    cmd: [python, -m, tools.pick_data, --root, "{D}", --arm, abl_tile_s25, data_A_rfs.yaml, --arm, abl_tile_s25_rfs05, data_A_rfs05.yaml,
+          --out, runs/eval/a2_data.txt]
+  - name: A2
+    train: A2
+    cmd: [python, -m, anveshak.train, --name, A2, --data, "{read:runs/eval/a2_data.txt}", --from, runs/A/weights/best.pt,
+          epochs=12, val=False, tile=True, imgsz=640, batch=8, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, close_mosaic=2, scale=0.25]
+  - name: infer_A_val_A2
+    cmd: [python, -m, anveshak.infer, --weights, runs/A2/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_A2.csv]
+  - name: score_A_val_A2
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_A2.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
+  # --- Final stage: Set B train + val, pseudo-labels and replay from A2 (PLAN 5.5) ---
+  - name: pseudo_B_a2
+    cmd: [python, -m, tools.pseudo, --weights, runs/A2/weights/last.pt, --data, "{D}/yolo/data_B.yaml", --replay, "{read:runs/eval/a2_data.txt}",
+          --all, --replay-n, 6000, --tag, _a2]
+  - name: copypaste_a2
+    cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_a2.yaml",
+          --n, 1500, --all, --tag, _a2]
   - name: B_final              # B-val is in training now, so its val numbers are optimistic and last.pt is the deliverable
     train: B_final
-    cmd: [python, -m, anveshak.train, --name, B_final, --data, "{read:runs/eval/final_data.txt}", --from, runs/A/weights/best.pt,
-          epochs=60, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=20]
-  - name: infer_A_val_final    # retention check (A-val is still held out)
+    cmd: [python, -m, anveshak.train, --name, B_final, --data, "{D}/yolo/data_B_mix_a2_cp_a2.yaml", --from, runs/A2/weights/last.pt,
+          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=10]
+  - name: infer_A_val_final    # retention check (A-val is still held out); compare with A_val_A2 for the forgetting cost
     cmd: [python, -m, anveshak.infer, --weights, runs/B_final/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
           --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_final.csv]
   - name: score_A_val_final
-    cmd: [python, tools/oe_score.py, runs/eval/A_val_final.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_final.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
   - name: r1_final
     cmd: [python, -m, anveshak.infer, --weights, runs/B_final/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
-          --classes, "{D}/class_list.csv", --out, runs/submissions/r1_final.csv, --validator, "{D}/validate_predictions.py"]
+          --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final.csv, --validator, "{D}/validate_predictions.py"]

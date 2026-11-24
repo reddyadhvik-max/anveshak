@@ -6,5 +6,5 @@ max_known: 900
 unknown_conf: 0.05    # with the size floor and per-tile cap below (A-model B-val proxy grid, 23 Nov: U-F1 0.023 -> 0.170)
 unknown_iou: 0.5
 unknown_min_side: 48  # px, sqrt-area. Proxy peak was 64 (0.189), but 80 collapses; 48 keeps margin (tiny unknowns are mostly missed cars)
-unknown_known_max: 1.0  # drop an unknown overlapping (IoU >= 0.5) a known box scoring >= this; 1.0 = off (tuned 24 Nov)
+unknown_known_max: 0.5  # drop an unknown overlapping (IoU >= 0.5) a known box scoring >= this; 0.5 = best proxy U-F1, +0.001 A-val (24 Nov)
 max_unknown: 10       # top-k unknowns per tile; max_known + max_unknown <= 1000 rows per tile (competition cap)
