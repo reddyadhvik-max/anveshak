@@ -85,6 +85,40 @@ steps:
           --replay-n, 6000, --tag, _r6k]
   - name: copypaste_r6k
     cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_r6k.yaml", --n, 1500]
+  # --- 24 Nov: Stage A recipe ablation (A plateaued at ~0.28 mAP50 from epoch ~100; train box loss stays above val).
+  #     Suspects: BatchNorm at batch 2, scale=0.5 shrinking 24 px objects. Three arms from A best.pt, same LR restart,
+  #     25% of the RFS train list, 10 epochs, no per-epoch val. Ultralytics tile=True trains on native 640 windows
+  #     of the 1024 tiles (no resize, 4 windows per tile), so batch 8 fits. Judged by our own 1024 inference on A-val. ---
+  - name: abl_ctrl
+    train: abl_ctrl
+    cmd: [python, -m, anveshak.train, --name, abl_ctrl, --data, "{D}/yolo/data_A_rfs.yaml", --from, runs/A/weights/best.pt,
+          epochs=10, fraction=0.25, val=False, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, close_mosaic=2]
+  - name: abl_tile
+    train: abl_tile
+    cmd: [python, -m, anveshak.train, --name, abl_tile, --data, "{D}/yolo/data_A_rfs.yaml", --from, runs/A/weights/best.pt,
+          epochs=10, fraction=0.25, val=False, tile=True, imgsz=640, batch=8, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, close_mosaic=2]
+  - name: abl_tile_s25
+    train: abl_tile_s25
+    cmd: [python, -m, anveshak.train, --name, abl_tile_s25, --data, "{D}/yolo/data_A_rfs.yaml", --from, runs/A/weights/best.pt,
+          epochs=10, fraction=0.25, val=False, tile=True, imgsz=640, batch=8, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, close_mosaic=2, scale=0.25]
+  - name: eval_abl_ctrl
+    cmd: [python, -m, anveshak.infer, --weights, runs/abl_ctrl/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_abl_ctrl.csv]
+  - name: score_abl_ctrl
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_abl_ctrl.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
+  - name: eval_abl_tile
+    cmd: [python, -m, anveshak.infer, --weights, runs/abl_tile/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_abl_tile.csv]
+  - name: score_abl_tile
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_abl_tile.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
+  - name: eval_abl_tile_s25
+    cmd: [python, -m, anveshak.infer, --weights, runs/abl_tile_s25/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_abl_tile_s25.csv]
+  - name: score_abl_tile_s25
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_abl_tile_s25.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
   - name: B4
     train: B4
     cmd: [python, -m, anveshak.train, --name, B4, --data, "{D}/yolo/data_B_mix_r6k_cp.yaml", --from, runs/A/weights/best.pt,

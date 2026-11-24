@@ -174,6 +174,7 @@ def main():
     ap.add_argument("--as-unknown", nargs="*", default=[])
     ap.add_argument("--pick-out", help="write the chosen threshold here")
     ap.add_argument("--pick-prec", type=float, help="choose the lowest threshold with U-Prec >= this (mining); default: best U-F1")
+    ap.add_argument("--per-class", action="store_true", help="also print AP and GT count per known class")
     ap.add_argument("--sweep", nargs="*", type=float, help="unknown score thresholds to try (preds from infer --raw)")
     ap.add_argument("--min-side", nargs="*", type=float, default=[0.0], help="with --sweep: also try dropping unknowns below this sqrt-area (px)")
     ap.add_argument("--topk", nargs="*", type=int, default=[0], help="with --sweep: also try keeping only the top-k unknowns per tile (0 = all)")
@@ -201,6 +202,12 @@ def main():
         return
     r = score(preds, gts, known)
     print(json.dumps({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items() if k != "AP"}, indent=1))
+    if a.per_class:
+        n = defaultdict(int)
+        for _, label, _ in gts:
+            n[label] += 1
+        for label, ap in sorted(r["AP"].items(), key=lambda kv: -n[kv[0]]):
+            print(f"{label:<16} n_gt {n[label]:>7}  AP50 {ap:.4f}")
 
 
 if __name__ == "__main__":
