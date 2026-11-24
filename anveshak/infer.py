@@ -34,13 +34,26 @@ def load_image(path):
     return torch.from_numpy(np.ascontiguousarray(img[..., :3][..., ::-1].transpose(2, 0, 1))).float() / 255  # BGR->RGB like Format
 
 
-def forward(model, path, device):
-    """Raw head output (4+52, N) for one tile at native resolution (padded to a stride multiple, never resized)."""
+def forward(model, path, device, tta=False):
+    """Raw head output (4+52, N) for one tile at native resolution (padded to a stride multiple, never resized).
+    tta: also run the h-, v- and hv-flipped tile and append those anchors (boxes mapped back), so the usual NMS in
+    postprocess merges all four views. Deterministic."""
     img = load_image(path)
     stride = int(model.stride.max())
     h, w = img.shape[1:]
-    img = torch.nn.functional.pad(img, (0, -w % stride, 0, -h % stride), value=114 / 255)
-    return model(img[None].to(device))[0][0].float().cpu()
+    img = torch.nn.functional.pad(img, (0, -w % stride, 0, -h % stride), value=114 / 255)[None].to(device)
+    if not tta:
+        return model(img)[0][0].float().cpu()
+    H, W = img.shape[2:]
+    outs = []
+    for dims in ((), (3,), (2,), (2, 3)):
+        o = model(img.flip(dims) if dims else img)[0][0].float().cpu()
+        if 3 in dims:
+            o[0] = W - o[0]  # x centre
+        if 2 in dims:
+            o[1] = H - o[1]  # y centre
+        outs.append(o)
+    return torch.cat(outs, 1)
 
 
 def postprocess(out, slots, pp):
@@ -83,6 +96,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--set", nargs="*", default=[], help="override postproc values, e.g. unknown_conf=0.4")
+    ap.add_argument("--tta", action="store_true", help="flip test-time augmentation (4 views, merged by the same NMS)")
     ap.add_argument("--raw", action="store_true", help="skip the conflict rule (for oe_score --sweep, which applies it per threshold)")
     ap.add_argument("--validator", help="validate_predictions.py; run it on the CSV when given")
     a = ap.parse_args()
@@ -104,7 +118,7 @@ def main():
     rows = []
     with torch.inference_mode():
         for n, t in enumerate(tiles):
-            out = forward(model, next(a.images.glob(f"{t}.*")), a.device)
+            out = forward(model, next(a.images.glob(f"{t}.*")), a.device, a.tta)
             for slot, s, x1, y1, x2, y2 in postprocess(out, slots, pp):
                 rows.append({"tile": t, "label": UNKNOWN if slot == UNK_SLOT else names[slot], "score": s,
                              "box": [x1, y1, x2, y2], "row": len(rows)})

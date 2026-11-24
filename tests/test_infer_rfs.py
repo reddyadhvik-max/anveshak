@@ -118,3 +118,26 @@ def test_pick_variant_choose():
     r = {"B": (0.2517, 0.0786), "B2": (0.2400, 0.1200), "B3": (0.2490, 0.0950)}
     assert choose(r, 0.01) == "B3"     # B2 is best on few-shot but lost too much on base classes
     assert choose(r, 0.02) == "B2"
+
+
+def test_forward_tta_maps_boxes_back(tmp_path):
+    import cv2
+    import numpy as np
+    import torch
+    from anveshak.infer import forward
+
+    class Fake(torch.nn.Module):  # "detects" the bright pixel: one anchor at its location
+        stride = torch.tensor([32.])
+
+        def forward(self, x):
+            y, xx = divmod(int(x[0, 0].argmax()), x.shape[3])
+            out = torch.zeros(1, 56, 1)
+            out[0, :4, 0] = torch.tensor([xx + 0.5, y + 0.5, 4, 4])
+            return (out,)
+
+    im = np.zeros((64, 96, 3), np.uint8)
+    im[10, 70] = 255
+    cv2.imwrite(str(tmp_path / "t.png"), im)
+    o = forward(Fake(), tmp_path / "t.png", "cpu", tta=True)
+    assert o.shape == (56, 4)
+    assert torch.allclose(o[0], torch.full((4,), 70.5)) and torch.allclose(o[1], torch.full((4,), 10.5))
