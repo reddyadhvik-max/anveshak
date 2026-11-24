@@ -29,6 +29,7 @@ def main():
     ap.add_argument("data", type=Path, help="data_A.yaml written by tools/convert.py")
     ap.add_argument("--thr", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--tag", default="_rfs", help="output suffix (e.g. _rfs3 for thr 0.3)")
     a = ap.parse_args()
     data = YAML.load(a.data)
     train = Path(data["train"])
@@ -41,10 +42,10 @@ def main():
     out = []
     for img, r in zip(imgs, repeat_factors(classes, a.thr)):
         out += [img] * (int(r) + (rnd.random() < r - int(r)))
-    dst = train.with_name(train.stem + "_rfs.txt")
+    dst = train.with_name(train.stem + a.tag + ".txt")
     dst.write_text("\n".join(out) + "\n")
     data["train"] = str(dst)
-    YAML.save(a.data.with_name(a.data.stem + "_rfs.yaml"), data)
+    YAML.save(a.data.with_name(a.data.stem + a.tag + ".yaml"), data)
     print(f"{len(imgs)} tiles -> {len(out)} samples per epoch (x{len(out) / len(imgs):.2f}); wrote {dst}")
 
 
