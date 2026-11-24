@@ -1,7 +1,7 @@
 """Why is a class's AP low? For every GT box, the highest-scoring prediction (any class, score >= --min-score) with
 IoU >= 0.5 decides: right class, a wrong class (which one), or nothing there (missed / mislocalised).
 
-  python tools/confusion.py runs/eval/A_val.csv --labels ~/data/round1/dataset_A/labels --tiles splits/dataset_A_val.txt
+  python -m tools.confusion runs/eval/A_val.csv --labels ~/data/round1/dataset_A/labels --tiles splits/dataset_A_val.txt
 """
 import argparse
 from collections import Counter, defaultdict

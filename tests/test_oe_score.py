@@ -71,3 +71,12 @@ def test_confusion():
              {"tile": "t", "label": "c", "score": 0.01, "box": [90, 90, 99, 99]}]  # below min_score
     r = confusion(preds, gts, 0.05)
     assert r["a"] == {"x": 1} and r["b"] == {"b": 1} and r["c"] == {None: 1}
+
+
+def test_filter_unknowns_known_wins():
+    from tools.oe_score import filter_unknowns
+    P = lambda l, s, box, r: {"tile": "a", "label": l, "score": s, "box": box, "row": r}
+    preds = [P("car", 0.4, [0, 0, 50, 50], 0), P("unknown", 0.9, [0, 0, 50, 48], 1),   # overlaps a strong known
+             P("car", 0.02, [100, 100, 150, 150], 2), P("unknown", 0.9, [100, 100, 150, 150], 3)]  # known is weak
+    rows = sorted(p["row"] for p in filter_unknowns(preds, 0.1, known_max=0.1))
+    assert rows == [0, 2, 3]

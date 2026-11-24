@@ -119,6 +119,31 @@ steps:
   - name: score_abl_tile_s25
     cmd: [python, tools/oe_score.py, runs/eval/A_val_abl_tile_s25.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
           --classes, "{D}/class_list.csv", --per-class]
+  # --- 24 Nov: unknown boxes were deleting known ones. With the old postproc, 3,606 A-val GT had an unknown as top
+  #     prediction, and the conflict rule then removed the correct known box (tools.confusion). So earlier A-val numbers
+  #     mix model and postproc effects, B2's +0.038 included. Re-measure A, B and B2 from raw outputs under one postproc,
+  #     and tune unknown_known_max (known wins) on A-val mAP_K + the B-val unknown proxy together. ---
+  - name: infer_A_val_raw_A
+    cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --out, runs/eval/A_val_raw_A.csv]
+  - name: kmax_A_val_A
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_raw_A.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --sweep, 0.05, --min-side, 48, --topk, 10, --known-max, 1.0, 0.5, 0.3, 0.2, 0.1, 0.05, 0.02]
+  - name: infer_A_val_raw_B
+    cmd: [python, -m, anveshak.infer, --weights, runs/B/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --out, runs/eval/A_val_raw_B.csv]
+  - name: kmax_A_val_B
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_raw_B.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --sweep, 0.05, --min-side, 48, --topk, 10, --known-max, 1.0, 0.5, 0.3, 0.2, 0.1, 0.05, 0.02]
+  - name: infer_A_val_raw_B2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B2/weights/best.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --out, runs/eval/A_val_raw_B2.csv]
+  - name: kmax_A_val_B2
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_raw_B2.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --sweep, 0.05, --min-side, 48, --topk, 10, --known-max, 1.0, 0.5, 0.3, 0.2, 0.1, 0.05, 0.02]
+  - name: kmax_B_val_proxy
+    cmd: [python, tools/oe_score.py, runs/eval/B_val_raw.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, --sweep, 0.05, --min-side, 48, --topk, 10, --known-max, 1.0, 0.5, 0.3, 0.2, 0.1, 0.05, 0.02]
   - name: B4
     train: B4
     cmd: [python, -m, anveshak.train, --name, B4, --data, "{D}/yolo/data_B_mix_r6k_cp.yaml", --from, runs/A/weights/best.pt,

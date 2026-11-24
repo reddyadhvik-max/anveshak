@@ -128,10 +128,27 @@ def pick(res, min_prec=None):
     return max(res, key=lambda tr: (tr[1]["U-F1"], tr[0]))[0]
 
 
-def filter_unknowns(preds, thr, min_side=0.0, topk=0):
-    """Unknown rows with score >= thr and sqrt-area >= min_side, then the top-k per tile (0 = all). Known rows pass."""
+def filter_unknowns(preds, thr, min_side=0.0, topk=0, known_max=1.0):
+    """Unknown rows with score >= thr and sqrt-area >= min_side, minus those overlapping (IoU >= 0.5) a known row
+    scoring >= known_max (known wins: the conflict rule would otherwise delete that known box), then the top-k per
+    tile (0 = all). Known rows pass."""
     u = [p for p in preds if p["label"] == UNKNOWN and p["score"] >= thr
          and max(p["box"][2] - p["box"][0], 0) * max(p["box"][3] - p["box"][1], 0) >= min_side ** 2]
+    if known_max < 1.0 and u:
+        strong = defaultdict(list)
+        for p in preds:
+            if p["label"] != UNKNOWN and p["score"] >= known_max:
+                strong[p["tile"]].append(p["box"])
+        by_tile = defaultdict(list)
+        for p in u:
+            by_tile[p["tile"]].append(p)
+        u = []
+        for t, ps in by_tile.items():
+            if not strong[t]:
+                u += ps
+                continue
+            m = iou_matrix([p["box"] for p in ps], strong[t]).max(1)
+            u += [p for p, v in zip(ps, m) if v < IOU_T]
     if topk:
         by_tile = defaultdict(list)
         for p in sorted(u, key=lambda p: -p["score"]):
@@ -177,21 +194,23 @@ def main():
     ap.add_argument("--per-class", action="store_true", help="also print AP and GT count per known class")
     ap.add_argument("--sweep", nargs="*", type=float, help="unknown score thresholds to try (preds from infer --raw)")
     ap.add_argument("--min-side", nargs="*", type=float, default=[0.0], help="with --sweep: also try dropping unknowns below this sqrt-area (px)")
+    ap.add_argument("--known-max", nargs="*", type=float, default=[1.0], help="with --sweep: also try dropping unknowns that overlap a known >= this")
     ap.add_argument("--topk", nargs="*", type=int, default=[0], help="with --sweep: also try keeping only the top-k unknowns per tile (0 = all)")
     a = ap.parse_args()
     tiles = [l.strip() for l in open(a.tiles) if l.strip()]
     preds, gts, known = read_preds(a.preds), read_gts(a.labels, tiles, a.as_unknown), read_known(a.classes, a.as_unknown)
     if a.sweep:
-        grid = len(a.min_side) > 1 or len(a.topk) > 1 or a.min_side != [0.0] or a.topk != [0]
-        print("unk_thr  " + ("min_side topk  " if grid else "") + "mAP_K   U-Rec   U-Prec  U-F1    OE      n_unk")
+        grid = any(len(v) > 1 for v in (a.min_side, a.topk, a.known_max)) or (a.min_side, a.topk, a.known_max) != ([0.0], [0], [1.0])
+        print("unk_thr  " + ("min_side topk  kmax  " if grid else "") + "mAP_K   U-Rec   U-Prec  U-F1    OE      n_unk")
         res = []
         for t in a.sweep:
             for ms in a.min_side:
                 for k in a.topk:
-                    r = score(filter_unknowns(preds, t, ms, k), gts, known)
-                    res.append(((t, ms, k) if grid else t, r))
-                    g = f"{ms:<8.0f} {k:<5d} " if grid else ""
-                    print(f"{t:<8.2f} {g}{r['mAP_K']:.4f}  {r['U-Rec']:.4f}  {r['U-Prec']:.4f}  {r['U-F1']:.4f}  {r['OE']:6.2f}  {r['n_unknown_pred']}")
+                    for km in a.known_max:
+                        r = score(filter_unknowns(preds, t, ms, k, km), gts, known)
+                        res.append(((t, ms, k, km) if grid else t, r))
+                        g = f"{ms:<8.0f} {k:<5d} {km:<5.2f} " if grid else ""
+                        print(f"{t:<8.2f} {g}{r['mAP_K']:.4f}  {r['U-Rec']:.4f}  {r['U-Prec']:.4f}  {r['U-F1']:.4f}  {r['OE']:6.2f}  {r['n_unknown_pred']}", flush=True)
         if a.pick_out:
             t = pick(res, a.pick_prec)
             if t is None:  # never fall back silently: a later step would consume a bad threshold

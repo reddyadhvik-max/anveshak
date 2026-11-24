@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torchvision.ops import batched_nms, nms
+from torchvision.ops import batched_nms, box_iou, nms
 
 from anveshak.patch import OBJ_SLOT, UNK_SLOT
 from tools.make_csv import validate, write_csv
@@ -62,8 +62,12 @@ def postprocess(out, slots, pp):
     su = torch.maximum(s[:, UNK_SLOT], s[:, OBJ_SLOT] * (1 - kmax))
     side2 = (boxes[:, 2] - boxes[:, 0]).clamp(min=0) * (boxes[:, 3] - boxes[:, 1]).clamp(min=0)
     a = ((su > pp["unknown_conf"]) & (side2 >= pp.get("unknown_min_side", 0) ** 2)).nonzero(as_tuple=True)[0]
-    keep = nms(boxes[a], su[a], pp["unknown_iou"])[: pp["max_unknown"]]
-    for k in a[keep].tolist():
+    a = a[nms(boxes[a], su[a], pp["unknown_iou"])]
+    km = pp.get("unknown_known_max", 1.0)
+    strong = [d[2:] for d in dets if d[1] >= km]
+    if km < 1.0 and strong and len(a):  # known wins: the conflict rule would otherwise delete that known box
+        a = a[box_iou(boxes[a], torch.tensor(strong)).amax(1) < 0.5]
+    for k in a[: pp["max_unknown"]].tolist():
         dets.append((UNK_SLOT, su[k].item(), *boxes[k].tolist()))
     return dets
 
