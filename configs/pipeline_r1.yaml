@@ -162,6 +162,20 @@ steps:
     cmd: [python, tools/oe_score.py, runs/eval/B_val_raw_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
           --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
           --sweep, 0.05, 0.1, --min-side, 48, 64, --topk, 10, --known-max, 1.0, 0.5, 0.3]
+  # --- 24 Nov 18:00: tile+scale0.25 = +0.014 over ctrl (broad, small); giant-class confusions unmoved -> test stronger
+  #     tile-level RFS (thr 0.5, x2.25 epoch) on the same recipe before fixing the A2 recipe. Compute-unequal (~2.25x). ---
+  - name: rfs_A_05
+    cmd: [python, tools/rfs.py, "{D}/yolo/data_A.yaml", --thr, 0.5, --tag, _rfs05]
+  - name: abl_tile_s25_rfs05
+    train: abl_tile_s25_rfs05
+    cmd: [python, -m, anveshak.train, --name, abl_tile_s25_rfs05, --data, "{D}/yolo/data_A_rfs05.yaml", --from, runs/A/weights/best.pt,
+          epochs=10, fraction=0.25, val=False, tile=True, imgsz=640, batch=8, nbs=64, workers=4, optimizer=SGD, lr0=0.002, warmup_epochs=1, close_mosaic=2, scale=0.25]
+  - name: eval_abl_tile_s25_rfs05
+    cmd: [python, -m, anveshak.infer, --weights, runs/abl_tile_s25_rfs05/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_abl_tile_s25_rfs05.csv]
+  - name: score_abl_tile_s25_rfs05
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_abl_tile_s25_rfs05.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
+          --classes, "{D}/class_list.csv", --per-class]
   - name: B4
     train: B4
     cmd: [python, -m, anveshak.train, --name, B4, --data, "{D}/yolo/data_B_mix_r6k_cp.yaml", --from, runs/A/weights/best.pt,
