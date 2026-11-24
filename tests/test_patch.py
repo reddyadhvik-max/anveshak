@@ -60,3 +60,31 @@ def test_per_image_assignment_matches_batched(monkeypatch):
     per_image = crit(preds, batch)[0]
     assert crit.assigner._oom_warned  # the per-image path really ran
     assert torch.allclose(full, per_image)
+
+
+def test_chunked_assignment_matches_original(monkeypatch):
+    from ultralytics.utils.tal import TaskAlignedAssigner
+    patch.apply()
+    torch.manual_seed(0)
+    na_side, stride = 32, 8
+    ys, xs = torch.meshgrid(torch.arange(na_side), torch.arange(na_side), indexing="ij")
+    anc = torch.stack([xs, ys], -1).view(-1, 2).float() * stride + stride / 2
+    n = 300  # dense, overlapping boxes so multi-positive anchors occur
+    xy = torch.rand(1, n, 2) * 240
+    wh = torch.rand(1, n, 2) * 40 + 4
+    gt = torch.cat([xy, xy + wh], -1)
+    labels = torch.randint(0, 52, (1, n, 1)).float()
+    mask = torch.ones(1, n, 1)
+    mask[0, -20:] = 0  # padded rows
+    half = torch.rand(len(anc), 2) * 20 + 2
+    pd_boxes = torch.cat([anc - half, anc + half], -1)[None]  # boxes around each anchor: real overlaps
+    pd_scores = torch.rand(1, len(anc), 52)
+    a = TaskAlignedAssigner(topk=10, num_classes=52)
+    monkeypatch.setattr(patch, "GT_CHUNK", 10**9)  # original path
+    ref = a(pd_scores, pd_boxes, anc, labels, gt, mask)
+    monkeypatch.setattr(patch, "GT_CHUNK", 64)
+    out = a(pd_scores, pd_boxes, anc, labels, gt, mask)
+    fg = ref[3]
+    assert fg.sum() > 100 and torch.equal(fg, out[3])
+    assert torch.equal(ref[4][fg], out[4][fg]) and torch.equal(ref[0][fg], out[0][fg])
+    assert torch.allclose(ref[1][fg], out[1][fg]) and torch.allclose(ref[2], out[2], atol=1e-6)

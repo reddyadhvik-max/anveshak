@@ -34,6 +34,15 @@ def load_image(path):
     return torch.from_numpy(np.ascontiguousarray(img[..., :3][..., ::-1].transpose(2, 0, 1))).float() / 255  # BGR->RGB like Format
 
 
+def forward(model, path, device):
+    """Raw head output (4+52, N) for one tile at native resolution (padded to a stride multiple, never resized)."""
+    img = load_image(path)
+    stride = int(model.stride.max())
+    h, w = img.shape[1:]
+    img = torch.nn.functional.pad(img, (0, -w % stride, 0, -h % stride), value=114 / 255)
+    return model(img[None].to(device))[0][0].float().cpu()
+
+
 def postprocess(out, slots, pp):
     """out: (4+52, N) raw head output for one image (xywh px, sigmoid scores). slots: active known slot ids.
     Returns [(slot or UNK_SLOT, score, x1, y1, x2, y2)]."""
@@ -84,15 +93,10 @@ def main():
     from ultralytics import YOLO
     torch.use_deterministic_algorithms(True, warn_only=True)
     model = YOLO(a.weights).model.float().eval().to(a.device)
-    stride = int(model.stride.max())
     rows = []
     with torch.inference_mode():
         for n, t in enumerate(tiles):
-            img = load_image(next(a.images.glob(f"{t}.*")))
-            h, w = img.shape[1:]
-            ph, pw = -h % stride, -w % stride  # native resolution: pad to a stride multiple, never resize
-            img = torch.nn.functional.pad(img, (0, pw, 0, ph), value=114 / 255)
-            out = model(img[None].to(a.device))[0][0].float().cpu()
+            out = forward(model, next(a.images.glob(f"{t}.*")), a.device)
             for slot, s, x1, y1, x2, y2 in postprocess(out, slots, pp):
                 rows.append({"tile": t, "label": UNKNOWN if slot == UNK_SLOT else names[slot], "score": s,
                              "box": [x1, y1, x2, y2], "row": len(rows)})
