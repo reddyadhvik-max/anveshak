@@ -62,10 +62,10 @@ Full per-class table: `docs/phases/PHASE_0.md`.
 | Need | Tool | Notes |
 |---|---|---|
 | Training lineage + inference | **LOQ 15AHP10, RTX 5050 Laptop 8 GB** (Blackwell, sm_120) | **Needs PyTorch built for CUDA 12.8** (`cu128` wheels). Plugged in, Lenovo Vantage Performance mode, cooling pad, sleep and hibernate off, Windows Update paused for 2 weeks. |
-| OS on LOQ | **WSL2 Ubuntu 24.04** | Data inside WSL ext4 (`~/data/round1`), never `/mnt/c`. `.wslconfig`: `memory=12GB`, `swap=24GB`, `processors=` all but 2. |
+| OS on LOQ | **Native Windows 11** (decided 2026-11-18; WSL wasn't installed, and native avoids admin, a reboot, the VM RAM cap and keeping WSL alive) | Data in `~\data\round1` on local NTFS, not OneDrive. Optional Defender exclusion for the data and repo folders. |
 | Env | `uv` + Python 3.11 | `requirements.txt` pins `ultralytics==8.4.215`. torch is installed per machine. |
 | Dev machine | Mac (8 GB) | Code, tests, docs, CPU smoke tests. No real training. |
-| Mac ↔ LOQ | Tailscale (free) + SSH / VS Code Remote | Watch runs from the Mac. |
+| Mac ↔ LOQ | **Claude Remote Control** (Mac session `saxmachine-a3` ↔ LOQ session) + git | Messages for coordination, git for anything lasting. |
 | Experiments outside the lineage | Kaggle (P100/T4, ~30 GPU-h/week, phone verification only), Colab free | Dev-sim proxy runs (§6). Data uploaded as a **private** dataset subset. |
 | Alerts | `ntfy.sh` (free) | Phone ping on epoch milestones or a crash. |
 | Code | GitHub **private** repo | Kept private until after 17 Dec (rules: no sharing). |
@@ -236,7 +236,7 @@ Prep (P6): `r2/run_r2.sh <r2.zip>` does unzip → convert (R2 ids → slots 40�
 | Set B teaches base objects = background | Old-class pseudo-labels + replay (§5.5) |
 | Tiny objects | P2 head, native 1024, no downscaling |
 | Dense tiles OOM in the assigner | Batch 4 + nbs 64. CPU fallback is built in |
-| Laptop thermals or crash over days | `save_period=5`, `resume=True`, cooling pad, ntfy alerts, `nvidia-smi` temp log |
+| Laptop thermals or crash over days, or the laptop needed for other work | Pause button (control panel) → resume from `last.pt`; `resume=True`, cooling pad, ntfy alerts, `nvidia-smi` temp log |
 | RTX 5050 needs CUDA 12.8 | cu128 wheels. Verify `torch.cuda.get_device_capability()` = (12, 0) |
 | Unknown flood lowers mAP via the conflict rule | Self-applied policy tuned on OE |
 | Reproduction mismatch | FP32 deterministic, pinned, config shipped, GPU+CPU repro check |
@@ -249,4 +249,13 @@ No DETRs (slow from scratch). No self-supervised pre-stage (breaks "A first"). N
 - **2026-11-18:** Team registered. GPU confirmed (RTX 5050 8 GB). Data audited remotely (no 20 GB download needed on the Mac).
   - **P0 built:** `patch.py` (no-AMP-download + objectness slot), `yolo11-p2.yaml` (nc 52), `train.py` (provenance, lineage `--from`), `convert.py`, `eda.py`, `oe_score.py`, `make_csv.py`. 12 tests pass, including the official validator.
   - CPU smoke test: random-init stage → checkpoint stage, offline, no `.pt` downloaded.
-  - **Next (P1, on the LOQ):** WSL2 + cu128 torch, download `round1.zip`, `convert.py`, scale benchmark, insurance baseline.
+  - **P1 started:** pause/resume control panel (`anveshak/control.py`, localhost:8765). Pause = clean exit right after the epoch's `last.pt` save; Resume = `--resume last.pt`. Tested live: paused after epoch 1/4, resumed 2→4, finished; a double-click spawns only one process.
+  - Added a **Stop now** button (SIGTERM → clean stop, resumable). The val split is frozen in `splits/` (A 952 tiles, B 172), so it's identical on every machine.
+  - LOQ setup is packaged: `scripts/loq/setup_wsl.sh` (env, cu128, data, convert, Windows desktop shortcut + startup panel + power settings) and `docs/LOQ_HANDOFF.md`, the task list for the Claude session on the LOQ. Coordination between the Mac and LOQ sessions goes through this repo.
+  - Remote Control is connected between the Mac and LOQ sessions. The LOQ turned out to be **native Windows 11 with no WSL**, so the setup switched to native Windows: `scripts/loq/setup_windows.ps1` plus the desktop "Anveshak Training" shortcut (`open_panel.ps1`).
+  - The panel is now cross-platform: Stop = a `STOP` flag checked every batch (no signals), the alive check uses psutil, and `train.py --detach` uses `spawn()` (Windows: hidden console + breakaway from the shell's job). Tested on the Mac: detach → stop → resume → pause.
+  - **LOQ set up** (torch 2.11 cu128 on sm_120, data at `C:\Users\reddy\data\round1`, 16/16 tests, splits identical). The button test passed on Windows (pause → resume → stop in 3 s → resume → finished; a detached run survives its shell). LOQ fixes: panel port 8765 → **8790** (PhoneBoxAgent owns 8765), an epoch log + ETA on the panel, no console flashes (`open_panel.pyw`).
+  - **`anveshak/infer.py`:** our own post-processing over the raw 52-slot head (native 1024, FP32): per-class multi-label NMS for active known slots; unknown = max(s_unk, s_obj·(1 − max known)); the conflict rule applied by us; thresholds in `configs/postproc.yaml`. **`tools/rfs.py`:** repeat-factor sampling as an oversampled train list. On real Set A, thr 0.1 → epoch ×1.30, rarest class 46 → 204 tiles, imbalance 102:1 → 34:1. **Stage A trains on `data_A_rfs.yaml`.**
+  - **Next:** s/m benchmark (LOQ, running) → choose the scale → the user starts Stage A. Mac: insurance CSV, A_mine design.
+  - **Scale benchmark (LOQ), `docs/phases/PHASE_1_bench.md`:** every config spills past the 8 GB of VRAM into Windows shared memory (sysmem fallback). The peaks come from the assigner on dense tiles, not from batch size. Power is about 30 W while spilling, and RAM hit 0 GB free. Epochs in 125 GPU-h with RFS: s b8 ≈ 93, m b4 ≈ 79, s b4 ≈ 232, m b2 ≈ 317 (noisy because of the spill). `rfs.py` on the LOQ: ×1.30 confirmed. `infer.py` 20-tile check passes the validator. **Next:** the user sets NVIDIA "CUDA Sysmem Fallback Policy = Prefer No Sysmem Fallback", then re-bench m b2 vs s b4 → choose the scale. Stage A not started.
+  - **Re-bench after the fix** (sysmem fallback off + `patch.ASSIGN_LIMIT`): s b8 and m b4 hit a real OOM in epoch 1, and Ultralytics halved them to **s b4 / m b2**, which then ran clean with no spill (power 62–68 W, shared < 1 GB). Epochs in 125 GPU-h with RFS: **s b4 ≈ 570, m b2 ≈ 325**. Recommendation: **m, batch=2**, workers=4. Set the batch explicitly: auto-halving only happens in the first epoch. RAM is still tight (≈ 2 GB free on average). Stage A not started (the user's call).

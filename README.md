@@ -34,6 +34,18 @@ python -m anveshak.train --name A --data ~/data/round1/yolo/data_A.yaml --scale 
 python -m anveshak.train --name B --data ~/data/round1/yolo/data_B.yaml --from runs/A/weights/last.pt freeze=10 ...
 ```
 
+## Pause / resume (control panel)
+```bash
+python -m anveshak.control                      # panel on http://localhost:8790 (the LOQ starts it at login)
+python -m anveshak.train --detach --name A ...  # background run, log in runs/A/train.log
+```
+**Pause after this epoch** drops `runs/<name>/PAUSE`. Training exits right after the next `last.pt` save, with the
+optimizer state intact. **Resume** runs `python -m anveshak.train --resume runs/<name>/weights/last.pt` and continues
+from the next epoch. A crashed or rebooted run shows as `stopped` and resumes the same way. Every resume is
+recorded in `provenance.json`. **Stop now** (with a confirmation prompt) drops `runs/<name>/STOP`. Training stops within one batch, losing only the epoch in progress.
+
+On the LOQ (native Windows), `powershell -ExecutionPolicy Bypass -File scripts\loq\setup_windows.ps1` sets everything up, including a **desktop shortcut "Anveshak Training"** that opens the panel (starting it if needed), the panel at Windows login, and no sleep on AC. See [docs/LOQ_HANDOFF.md](docs/LOQ_HANDOFF.md).
+
 ## Inference, scoring, CSV
 Built in phases P1–P3. See [PLAN.md §7–8](PLAN.md).
 `tools/oe_score.py` re-implements the published OE metric. `tools/make_csv.py` writes CSVs that pass `validate_predictions.py`.
