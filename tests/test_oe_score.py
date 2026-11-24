@@ -60,3 +60,14 @@ def test_filter_unknowns():
     assert rows(filter_unknowns(preds, 0.1)) == [0, 1, 2, 3, 5]
     assert rows(filter_unknowns(preds, 0.1, min_side=20)) == [0, 2, 3, 5]
     assert rows(filter_unknowns(preds, 0.1, min_side=20, topk=1)) == [0, 2, 5]
+
+
+def test_confusion():
+    from tools.confusion import confusion
+    gts = [("t", "a", [0, 0, 10, 10]), ("t", "b", [50, 50, 60, 60]), ("t", "c", [90, 90, 99, 99])]
+    preds = [{"tile": "t", "label": "a", "score": 0.3, "box": [0, 0, 10, 10]},
+             {"tile": "t", "label": "x", "score": 0.6, "box": [0, 0, 10, 9]},    # higher-scoring wrong class wins
+             {"tile": "t", "label": "b", "score": 0.9, "box": [50, 50, 60, 60]},
+             {"tile": "t", "label": "c", "score": 0.01, "box": [90, 90, 99, 99]}]  # below min_score
+    r = confusion(preds, gts, 0.05)
+    assert r["a"] == {"x": 1} and r["b"] == {"b": 1} and r["c"] == {None: 1}
