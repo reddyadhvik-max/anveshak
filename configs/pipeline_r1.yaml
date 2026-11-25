@@ -238,10 +238,14 @@ steps:
   - name: copypaste_base
     cmd: [python, -m, tools.copypaste, --data, "{D}/yolo/data_B.yaml", --bg, "{D}/yolo/data_A.yaml", --mix, "{D}/yolo/data_B_mix_base.yaml",
           --n, 1500, --all, --tag, _base]
+  # 25 Nov 17:44: B_final forgot 0.027 A-val (0.3498 -> 0.3229; o4cr -0.19, jww9 -0.12, 62q5 -0.09), trained at 1024
+  # while A2 trained on 640 tiles + scale 0.25. B_final2 uses A2's recipe (25 tile epochs ~ 50 at 1024 in time) + the
+  # halved lr from pick_lr_bf2.
   - name: B_final2
     train: B_final2
     cmd: [python, -m, anveshak.train, --name, B_final2, --data, "{D}/yolo/data_B_mix_base_cp_base.yaml", --from, "{read:runs/eval/base.txt}",
-          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, "lr0={read:runs/eval/bf2_lr0.txt}", warmup_epochs=1, freeze=10, save_period=10]
+          epochs=25, val=False, tile=True, imgsz=640, batch=8, nbs=64, workers=4, optimizer=SGD, "lr0={read:runs/eval/bf2_lr0.txt}", warmup_epochs=1,
+          close_mosaic=2, scale=0.25, freeze=10, save_period=5]
   - name: infer_A_val_final2
     cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
           --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_final2.csv]
