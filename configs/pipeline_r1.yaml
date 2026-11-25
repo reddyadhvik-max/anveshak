@@ -217,6 +217,8 @@ steps:
   # --- 25 Nov 03:48: A2 (12 full-data epochs) = 0.3498 A-val vs A 0.2964 (+0.053; the 25%/10-ep arm gave +0.014), so A
   #     is still undertrained. A3 = A2 + 12 more epochs; the better of A2/A3 seeds a second final stage. r1_final stays
   #     the insurance CSV. B_final2 hyperparameters can still change after score_A_val_final (forgetting check). ---
+  - name: pick_lr_bf2          # B_final2 lr0: halved if B_final lost > 0.01 A-val mAP_K vs A2
+    cmd: [python, -m, tools.pick_lr, --root, "{D}", --before, A2, --after, final, --out, runs/eval/bf2_lr0.txt]
   - name: A3
     train: A3
     cmd: [python, -m, anveshak.train, --name, A3, --data, "{read:runs/eval/a2_data.txt}", --from, runs/A2/weights/last.pt,
@@ -239,7 +241,7 @@ steps:
   - name: B_final2
     train: B_final2
     cmd: [python, -m, anveshak.train, --name, B_final2, --data, "{D}/yolo/data_B_mix_base_cp_base.yaml", --from, "{read:runs/eval/base.txt}",
-          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, lr0=0.001, warmup_epochs=1, freeze=10, save_period=10]
+          epochs=50, imgsz=1024, batch=2, nbs=64, workers=4, optimizer=SGD, "lr0={read:runs/eval/bf2_lr0.txt}", warmup_epochs=1, freeze=10, save_period=10]
   - name: infer_A_val_final2
     cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
           --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_final2.csv]
