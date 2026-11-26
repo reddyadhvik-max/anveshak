@@ -265,6 +265,9 @@ steps:
     cmd: [python, tools/oe_score.py, runs/eval/B_val_raw_A3_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, splits/dataset_B_val.txt,
           --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
           --sweep, 0.05, 0.1, 0.2, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5, 0.3]
+  - name: r1_final2_pp         # r1_final2 re-made with the re-tuned unknown threshold (0.10)
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final2_pp.csv, --validator, "{D}/validate_predictions.py"]
   - name: A4
     train: A4
     cmd: [python, -m, anveshak.train, --name, A4, --data, "{read:runs/eval/a2_data.txt}", --from, runs/A3/weights/last.pt,

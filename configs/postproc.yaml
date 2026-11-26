@@ -3,7 +3,7 @@ known_conf: 0.001     # low: mAP is ranked, extra low-score boxes only help
 known_iou: 0.6        # per-class NMS
 max_candidates: 30000 # pre-NMS cap per tile
 max_known: 900
-unknown_conf: 0.05    # with the size floor and per-tile cap below (A-model B-val proxy grid, 23 Nov: U-F1 0.023 -> 0.170)
+unknown_conf: 0.10      # re-tuned 26 Nov on the A3 base (B-val proxy, TTA): plateau 0.10/48/10/0.5 = U-F1 0.160 vs 0.146 at 0.05
 unknown_iou: 0.5
 unknown_min_side: 48  # px, sqrt-area. Proxy peak was 64 (0.189), but 80 collapses; 48 keeps margin (tiny unknowns are mostly missed cars)
 unknown_known_max: 0.5  # drop an unknown overlapping (IoU >= 0.5) a known box scoring >= this; 0.5 = best proxy U-F1, +0.001 A-val (24 Nov)
