@@ -475,3 +475,10 @@ steps:
     cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A4_g01_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
           --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
           --sweep, 0.05, 0.1, 0.15, 0.2, --min-side, 48, 64, --topk, 10, 20, --known-max, 1.0]
+  # --- 27 Nov 22:11: R1 pick = r1_final3_g025 (B_final3, lineage A -> A2 -> A3 -> A4 -> B_final3; postproc gamma 0.25 /
+  #     0.10 / 48 / 10 / known_max 1.0). Reproduction check: re-run inference from the checkpoint and compare. ---
+  - name: r1_final3_repro
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final3/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final3_repro.csv, --validator, "{D}/validate_predictions.py"]
+  - name: repro_check
+    cmd: [python, -m, tools.compare_csv, runs/submissions/r1_final3_g025.csv, runs/submissions/r1_final3_repro.csv]

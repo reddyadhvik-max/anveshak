@@ -37,11 +37,16 @@ python -m anveshak.pipeline --detach          # or Resume in the panel
 The lineage that produces the submission (each stage starts from the previous checkpoint; `--from` checks that all
 803 tensors match it before training):
 
-| Stage | From | Data | Recipe |
-|---|---|---|---|
-| A | random init | Set A train, repeat-factor sampling (RFS thr 0.1) | 1024 px, batch 2, 250 epochs |
-| A2, A3 | A, then A2 | same | native 640-px windows of each 1024 tile (`tile=True`), batch 8, scale 0.25, 12 epochs each |
-| B_final2 | the better of A2/A3 on A-val | Set B train + val ×6 (base classes pseudo-labelled by the base model, weak ones greyed out) + 6000 Set A replay tiles + 1500 Set A tiles with pasted Set B objects | A2's recipe, backbone frozen, lr0 halved if the previous B run forgot > 0.01 A-val mAP_K |
+| Stage | From | Data | Recipe | A-val mAP_K |
+|---|---|---|---|---|
+| A | random init | Set A train, repeat-factor sampling (RFS thr 0.1) | 1024 px, batch 2, 250 epochs | 0.296 |
+| A2 → A3 → A4 | previous stage | same | native 640-px windows of each 1024 tile (`tile=True`), batch 8, scale 0.25, 12 epochs each | 0.350 → 0.379 → 0.404 |
+| **B_final3** (R1) | A4 | Set B train + val ×6 (base classes pseudo-labelled by A4, weak ones greyed out) + 6000 Set A replay tiles + 1500 Set A tiles with pasted Set B objects | A2's recipe, backbone frozen (10 layers), lr0 0.0005, 25 epochs | 0.394 |
+
+The R1 checkpoint is chosen by estimated OE, not by mAP_K alone. Each extra Set A round sharpened the known classes but
+weakened unknown recall on a proxy (Set B tiles, classes 30–39 treated as unknown, ~430 boxes, never seen by any Set A
+model). A4 → B_final3 was the best trade-off once the unknown score was softened (γ 0.25 below). A5 → B_final4 reached
+0.414 A-val but scored lower on the proxy.
 
 Set A val (952 tiles) is never trained on; it measures base-class accuracy and forgetting at every stage.
 
@@ -59,12 +64,12 @@ On the LOQ (native Windows), `powershell -ExecutionPolicy Bypass -File scripts\l
 
 ## Inference, scoring, CSV
 ```bash
-python -m anveshak.infer --weights runs/B_final2/weights/last.pt --images ~/data/round1/test/images \
+python -m anveshak.infer --weights runs/B_final3/weights/last.pt --images ~/data/round1/test/images \
     --tiles ~/data/round1/test/tiles.csv --classes ~/data/round1/class_list.csv --tta \
-    --out runs/submissions/r1_final2.csv --validator ~/data/round1/validate_predictions.py
+    --out runs/submissions/r1_final3_g025.csv --validator ~/data/round1/validate_predictions.py
 ```
 - Post-processing thresholds live in [`configs/postproc.yaml`](configs/postproc.yaml) (tuned on validation only).
-- Unknowns come from the model's `unknown` and objectness outputs; an unknown box is dropped when a known box scoring
-  ≥ 0.5 overlaps it, and the competition's known-vs-unknown conflict rule is applied before writing.
+- Unknown score = max(s_unknown, s_objectness · (1 − max known score)^γ), γ = 0.25. Kept when ≥ 0.10, at least 48 px,
+  at most 10 per tile. The competition's known-vs-unknown conflict rule is applied before writing.
 - `--tta` merges four flipped views with the same NMS.
 - `tools/oe_score.py` re-implements the published OE metric. `tools/make_csv.py` writes CSVs that pass `validate_predictions.py`.
