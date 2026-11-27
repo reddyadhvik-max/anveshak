@@ -411,3 +411,40 @@ steps:
   - name: r1_final4
     cmd: [python, -m, anveshak.infer, --weights, runs/B_final4/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
           --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final4.csv, --validator, "{D}/validate_predictions.py"]
+  # --- 27 Nov 21:24: gamma 0.25 lifts the A3-base proxy U-F1 0.1056 -> 0.1194 (smooth: g0.5 in between, g0 collapses).
+  #     Check its A-val mAP_K cost on B_final2 (vs gamma 1 under the same postproc), whether it helps the A4/A5 bases more
+  #     (final3/final4 could overtake final2), and make the test CSV. postproc.yaml changes only after these land. ---
+  - name: infer_A_val_final2_g1
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --out, runs/eval/A_val_final2_g1.csv]
+  - name: score_A_val_final2_g1
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_final2_g1.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: infer_A_val_final2_g025
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --set, unknown_gamma=0.25, --out, runs/eval/A_val_final2_g025.csv]
+  - name: score_A_val_final2_g025
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_final2_g025.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: infer_A_val_final4_g025
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final4/weights/last.pt, --images, "{D}/dataset_A/images", --tiles, "{D}/dataset_A/tiles.csv",
+          --subset, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv", --set, unknown_gamma=0.25, --out, runs/eval/A_val_final4_g025.csv]
+  - name: score_A_val_final4_g025
+    cmd: [python, tools/oe_score.py, runs/eval/A_val_final4_g025.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt, --classes, "{D}/class_list.csv"]
+  - name: infer_B_all_raw_A4_g025_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A4/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta,
+          --set, unknown_gamma=0.25, --out, runs/eval/B_all_raw_A4_g025_tta.csv]
+  - name: unk_all_A4_g025
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A4_g025_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, --min-side, 48, 64, --topk, 10, 20, --known-max, 1.0]
+  - name: infer_B_all_raw_A5_g025_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A5/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta,
+          --set, unknown_gamma=0.25, --out, runs/eval/B_all_raw_A5_g025_tta.csv]
+  - name: unk_all_A5_g025
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A5_g025_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, --min-side, 48, 64, --topk, 10, 20, --known-max, 1.0]
+  - name: r1_final2_g025
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --tta, --set, unknown_gamma=0.25, --out, runs/submissions/r1_final2_g025.csv, --validator, "{D}/validate_predictions.py"]
