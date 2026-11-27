@@ -8,4 +8,4 @@ unknown_iou: 0.5
 unknown_min_side: 48  # px, sqrt-area. Proxy peak was 64 (0.189), but 80 collapses; 48 keeps margin (tiny unknowns are mostly missed cars)
 unknown_known_max: 1.0  # off again: on the 430-GT all-B proxy, 1.0 beats 0.5 on every base from A3 up (27 Nov)
 max_unknown: 10       # top-k unknowns per tile; max_known + max_unknown <= 1000 rows per tile (competition cap)
-unknown_gamma: 1.0     # unknown = max(s_unk, s_obj * (1 - max known)^gamma); < 1 softens the known penalty (grid 27 Nov)
+unknown_gamma: 0.25    # unknown = max(s_unk, s_obj * (1 - max known)^gamma); 0.25: all-B proxy U-F1 A3 0.106->0.119, A4 0.090->0.122, A-val cost ~0 (27 Nov)
