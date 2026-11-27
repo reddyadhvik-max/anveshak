@@ -323,6 +323,39 @@ steps:
   - name: score_A_val_A5
     cmd: [python, tools/oe_score.py, runs/eval/A_val_A5.csv, --labels, "{D}/dataset_A/labels", --tiles, splits/dataset_A_val.txt,
           --classes, "{D}/class_list.csv", --per-class]
+  # --- 27 Nov 06:36: the unknown proxy falls as the base gets stronger (best U-F1: A 0.18, A3 0.167, A4 0.112), but it
+  #     rests on 128 B-val GT (~3 TPs apart). No Set A model has seen any Set B tile, so B train + val (~430 GT of
+  #     classes 30-39) is a 3x larger proxy. Same grid for A, A3, A4, A5; the R1 CSV is chosen by estimated OE. ---
+  - name: b_all_list
+    cmd: [python, -c, "import csv; open('runs/eval/dataset_B_all.txt', 'w').write(''.join(r['tile_id'] + chr(10) for r in csv.DictReader(open(r'{D}/dataset_B/tiles.csv'))))"]
+  - name: infer_B_all_raw_A_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A/weights/best.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta, --out, runs/eval/B_all_raw_A_tta.csv]
+  - name: unk_all_A
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
+  - name: infer_B_all_raw_A3_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A3/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta, --out, runs/eval/B_all_raw_A3_tta.csv]
+  - name: unk_all_A3
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A3_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
+  - name: infer_B_all_raw_A4_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A4/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta, --out, runs/eval/B_all_raw_A4_tta.csv]
+  - name: unk_all_A4
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A4_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
+  - name: infer_B_all_raw_A5_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A5/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta, --out, runs/eval/B_all_raw_A5_tta.csv]
+  - name: unk_all_A5
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A5_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
   - name: pick_base3
     cmd: [python, -m, tools.pick_data, --root, "{D}", --prefix, ., --arm, A4, runs/A4/weights/last.pt, --arm, A5, runs/A5/weights/last.pt,
           --out, runs/eval/base3.txt]
