@@ -223,7 +223,7 @@ Prep (P6): `r2/run_r2.sh <r2.zip>` does unzip → convert (R2 ids → slots 40�
 - On the day: submit the first CSV as early as possible (ties go to the earlier submission), then refine and resubmit before close.
 
 ## 13. Round 1 deliverables checklist (P5)
-- [ ] `predictions_round1.csv` (validator OK)
+- [x] `predictions_round1.csv` (validator OK) = r1_final3_g025.csv, 780,021 rows; re-inference from the checkpoint reproduces it exactly (0 mismatched)
 - [ ] `r1_final.pt` + configs + SHA256SUMS + provenance chain
 - [ ] Code zip with `.git` + README (setup, data declaration, from-scratch statement, per-stage commands, reproduction)
 - [ ] PPT, 5–7 slides: problem understanding / method / why it fits / first implementation + numbers / R2 plan / team (solo: all roles)

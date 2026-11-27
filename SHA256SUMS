@@ -1,0 +1,6 @@
+# Round 1 deliverables (27 Nov 2026). Weights and CSV hashed on the LOQ, where they were produced.
+# postproc.yaml: the committed (LF) file. A Windows checkout with CRLF line endings hashes differently
+# (478cabd8...c245 on the LOQ) but has the same content.
+bd13436cb324ce0b07fd49183601f2a8ebb14024f7abbb0eb0bef6d4668f9b84  runs/B_final3/weights/last.pt
+71338fda9a45fc160d787a0e63d58c18dd8409fe137ebd8f19366fb1a81bb6e3  configs/postproc.yaml
+7366366eae7604d735d93a24687d08f35ca6fe205ae66541d3ccafb111e2cd65  runs/submissions/r1_final3_g025.csv
