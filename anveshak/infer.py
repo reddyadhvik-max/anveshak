@@ -72,7 +72,8 @@ def postprocess(out, slots, pp):
     for a, c, v in zip(i[keep].tolist(), j[keep].tolist(), sc[keep].tolist()):
         dets.append((slots[c], v, *boxes[a].tolist()))
     kmax = sk.amax(1) if len(slots) else torch.zeros(len(s))
-    su = torch.maximum(s[:, UNK_SLOT], s[:, OBJ_SLOT] * (1 - kmax))
+    # gamma < 1 softens the known-class penalty: stronger bases absorb novel objects into known classes (27 Nov proxy)
+    su = torch.maximum(s[:, UNK_SLOT], s[:, OBJ_SLOT] * (1 - kmax) ** pp.get("unknown_gamma", 1.0))
     side2 = (boxes[:, 2] - boxes[:, 0]).clamp(min=0) * (boxes[:, 3] - boxes[:, 1]).clamp(min=0)
     a = ((su > pp["unknown_conf"]) & (side2 >= pp.get("unknown_min_side", 0) ** 2)).nonzero(as_tuple=True)[0]
     a = a[nms(boxes[a], su[a], pp["unknown_iou"])]

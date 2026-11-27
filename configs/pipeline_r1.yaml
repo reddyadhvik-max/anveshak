@@ -361,6 +361,36 @@ steps:
           --out, runs/eval/base3.txt]
   - name: pick_lr_bf4          # forgetting of B_final3 vs its start (A4)
     cmd: [python, -m, tools.pick_lr, --root, "{D}", --before, A4, --after, final3, --out, runs/eval/bf4_lr0.txt]
+  # --- 27 Nov 14:36: on the 430-GT proxy U-F1 falls A 0.117 -> A3 0.105 -> A4 0.081 -> A5 0.075, and est. OE ranks
+  #     final2 (A3) first (~0.17 vs ~0.15). Submission candidate: final2 at 0.10/48/10/known_max 1.0. Also test
+  #     softening the known penalty in the unknown score (gamma) on the A3 base. ---
+  - name: r1_final2_pp2
+    cmd: [python, -m, anveshak.infer, --weights, runs/B_final2/weights/last.pt, --images, "{D}/test/images", --tiles, "{D}/test/tiles.csv",
+          --classes, "{D}/class_list.csv", --tta, --out, runs/submissions/r1_final2_pp2.csv, --validator, "{D}/validate_predictions.py"]
+  - name: infer_B_all_raw_A3_g05_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A3/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta,
+          --set, unknown_gamma=0.5, --out, runs/eval/B_all_raw_A3_g05_tta.csv]
+  - name: unk_all_A3_g05
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A3_g05_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
+  - name: infer_B_all_raw_A3_g025_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A3/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta,
+          --set, unknown_gamma=0.25, --out, runs/eval/B_all_raw_A3_g025_tta.csv]
+  - name: unk_all_A3_g025
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A3_g025_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
+  - name: infer_B_all_raw_A3_g0_tta
+    cmd: [python, -m, anveshak.infer, --weights, runs/A3/weights/last.pt, --images, "{D}/dataset_B/images", --tiles, "{D}/dataset_B/tiles.csv",
+          --subset, runs/eval/dataset_B_all.txt, --classes, "{D}/class_list.csv", --postproc, configs/postproc_sweep.yaml, --raw, --tta,
+          --set, unknown_gamma=0.0, --out, runs/eval/B_all_raw_A3_g0_tta.csv]
+  - name: unk_all_A3_g0
+    cmd: [python, tools/oe_score.py, runs/eval/B_all_raw_A3_g0_tta.csv, --labels, "{D}/dataset_B/labels", --tiles, runs/eval/dataset_B_all.txt,
+          --classes, "{D}/class_list.csv", --as-unknown, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+          --sweep, 0.05, 0.1, 0.15, 0.2, 0.3, --min-side, 32, 48, 64, --topk, 10, 20, --known-max, 1.0, 0.5]
   - name: pseudo_B_base3
     cmd: [python, -m, tools.pseudo, --weights, "{read:runs/eval/base3.txt}", --data, "{D}/yolo/data_B.yaml", --replay, "{read:runs/eval/a2_data.txt}",
           --all, --replay-n, 6000, --tag, _base3]
